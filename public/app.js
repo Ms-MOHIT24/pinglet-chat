@@ -472,3 +472,58 @@ if (token) boot();
 else if (sessionStorage.getItem("pinglet_pending_invite")) {
   $("#authHint").textContent = "You have a friend invite waiting. Create an account or sign in to send your request.";
 }
+
+/* Personal theme preferences are saved in this browser. */
+const themeNames = ["galaxy","aurora","nature","ocean","sakura","cute","pawprint","midnight"];
+function applyTheme(theme) {
+  const selected = themeNames.includes(theme) ? theme : "galaxy";
+  document.body.dataset.theme = localStorage.getItem("pinglet_custom_wallpaper") ? "custom" : selected;
+  const wallpaper = localStorage.getItem("pinglet_custom_wallpaper");
+  if (wallpaper) document.body.style.setProperty("--custom-wallpaper", 'url("' + wallpaper + '")');
+  else document.body.style.removeProperty("--custom-wallpaper");
+  document.querySelectorAll("[data-theme-choice]").forEach(button => {
+    button.classList.toggle("selected", button.dataset.themeChoice === selected && !wallpaper);
+  });
+}
+function openThemePicker() {
+  $("#themeModal").classList.remove("hidden");
+  applyTheme(localStorage.getItem("pinglet_theme") || "galaxy");
+}
+$("#themesNav").addEventListener("click", openThemePicker);
+$("#themeClose").addEventListener("click", () => $("#themeModal").classList.add("hidden"));
+$("#themeModal").addEventListener("click", event => {
+  if (event.target.id === "themeModal") $("#themeModal").classList.add("hidden");
+});
+document.querySelectorAll("[data-theme-choice]").forEach(button => button.addEventListener("click", () => {
+  localStorage.setItem("pinglet_theme", button.dataset.themeChoice);
+  localStorage.removeItem("pinglet_custom_wallpaper");
+  applyTheme(button.dataset.themeChoice);
+  toast(button.querySelector("b").textContent + " theme applied.");
+}));
+$("#wallpaperUpload").addEventListener("change", event => {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  if (!["image/png","image/jpeg","image/webp"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+    toast("Choose a PNG, JPG or WEBP image under 2 MB.");
+    event.target.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      localStorage.setItem("pinglet_custom_wallpaper", reader.result);
+      applyTheme("custom");
+      toast("Your custom wallpaper is applied on this device.");
+    } catch {
+      toast("This image is too large for browser storage. Try a smaller image.");
+    }
+  };
+  reader.onerror = () => toast("Could not read that image.");
+  reader.readAsDataURL(file);
+});
+$("#clearWallpaper").addEventListener("click", () => {
+  localStorage.removeItem("pinglet_custom_wallpaper");
+  applyTheme(localStorage.getItem("pinglet_theme") || "galaxy");
+  toast("Custom wallpaper removed.");
+});
+applyTheme(localStorage.getItem("pinglet_theme") || "galaxy");
