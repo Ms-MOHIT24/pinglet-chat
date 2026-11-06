@@ -527,3 +527,34 @@ $("#clearWallpaper").addEventListener("click", () => {
   toast("Custom wallpaper removed.");
 });
 applyTheme(localStorage.getItem("pinglet_theme") || "galaxy");
+
+/* Persist friendship labels on the account rather than only in local browser storage. */
+$("#editTag").addEventListener("click", () => {
+  if (!peer) return;
+  $("#modal").classList.remove("hidden");
+  $("#modalEyebrow").textContent = "MAKE IT YOURS";
+  $("#modalTitle").textContent = "Choose a friendship label";
+  $("#modalText").textContent = "This label is private to your account.";
+  $("#modalForm").classList.remove("hidden");
+  $("#qrShareContent").classList.add("hidden");
+  $("#modalLabel").innerHTML = 'Friendship label<select id="friendLabel"><option>Friend</option><option>True Friend</option><option>Bestie</option><option>Love</option><option>Partner in Crime</option><option>My Person</option></select>';
+  $("#friendLabel").value = peer.label || "Friend";
+  $("#modalSubmit").textContent = "Save label";
+  $("#modalError").textContent = "";
+  $("#modalForm").dataset.kind = "label";
+});
+const previousModalHandler = $("#modalForm").onsubmit;
+$("#modalForm").addEventListener("submit", async event => {
+  if (event.currentTarget.dataset.kind !== "label") return;
+  event.preventDefault();
+  try {
+    const label = $("#friendLabel").value;
+    await api("/friends/" + peer.id + "/label", { method: "PATCH", body: JSON.stringify({ label }) });
+    peer.label = label;
+    friends = friends.map(friend => friend.id === peer.id ? { ...friend, label } : friend);
+    $("#peerTag").textContent = label;
+    renderFriends();
+    $("#modal").classList.add("hidden");
+    toast("Friendship label saved.");
+  } catch (error) { $("#modalError").textContent = error.message; }
+});
