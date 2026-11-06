@@ -559,3 +559,7 @@ $("#modalForm").addEventListener("submit", async event => {
     toast("Friendship label saved.");
   } catch (error) { $("#modalError").textContent = error.message; }
 });
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Pinglet offline shell unavailable:", error)));
+}
