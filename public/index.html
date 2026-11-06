@@ -38,6 +38,7 @@
  </aside>
  <section class="main-panel">
   <header class="topbar"><div><div class="eyebrow" id="contextEyebrow">YOUR PRIVATE SPACE</div><h2 id="contextTitle">A little more connected.</h2></div><div class="secure-pill">⚠ EXPERIMENTAL · TEST ONLY</div></header>
+  <div id="snakeInviteBanner" class="snake-invite hidden"><span id="snakeInviteText">A friend invited you to Snake Duel.</span><button id="acceptSnakeInvite" class="primary small">Join game</button><button id="declineSnakeInvite" class="ghost small">Not now</button></div>
   <section id="welcome" class="welcome"><div class="welcome-art">✳</div><h2>Make room for your people.</h2><p>Share your QR invite or friend code. Once a friend request is accepted, they stay saved here.</p><button class="primary" id="welcomeAdd">＋ Add a friend</button><div class="feature-row"><span>🔐 Experimental encryption</span><span>♡ Saved friendships</span><span>🎮 Mini games</span></div></section>
   <section id="chat" class="chat hidden">
    <div class="friend-head"><div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div><div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label">✎</button></div></div>
@@ -49,7 +50,18 @@
    <div class="game-card"><div class="game-icon">✊</div><p class="eyebrow">QUICK PLAY</p><h2>Rock, paper, scissors</h2><p class="muted">A tiny game while you catch up.</p>
     <div class="choices"><button data-choice="rock">✊<small>Rock</small></button><button data-choice="paper">✋<small>Paper</small></button><button data-choice="scissors">✌️<small>Scissors</small></button></div><h3 id="gameResult">Choose your move.</h3><button id="resetGame" class="ghost">Play again</button>
    </div>
-   <div class="game-card game-tip"><div class="game-icon">🧩</div><p class="eyebrow">COMING TO THE CIRCLE</p><h2>More mini games</h2><p class="muted">This demo includes a quick solo game. Multiplayer games are not included yet.</p></div>
+   <div class="game-card snake-card">
+    <div class="game-icon">🐍</div><p class="eyebrow">1 VS 1 ONLINE</p><h2>Snake Duel</h2><p class="muted" id="snakeHelp">Open a saved friend's chat, then invite them here. Both players control their own snake.</p>
+    <div class="snake-score"><span id="snakeYouScore">YOU · 0</span><span id="snakeFriendScore">FRIEND · 0</span></div>
+    <div class="snake-board"><canvas id="snakeCanvas" width="720" height="480" aria-label="Two-player snake game board"></canvas><div id="snakeOverlay" class="snake-overlay"><b>Ready to play?</b><span>Invite your selected friend to join this room.</span></div></div>
+    <p id="snakeStatus" class="snake-status">Choose a saved friend to start.</p>
+    <div class="snake-actions"><button id="snakeJoin" class="primary">Invite friend to play</button><button id="snakeRestart" class="ghost hidden">Play again</button></div>
+    <div class="snake-controls" aria-label="Mobile snake controls">
+     <button data-dir="up" aria-label="Up">↑</button>
+     <div><button data-dir="left" aria-label="Left">←</button><button data-dir="down" aria-label="Down">↓</button><button data-dir="right" aria-label="Right">→</button></div>
+    </div>
+    <p class="snake-footnote">Keyboard: arrow keys or WASD · On mobile: use the direction pad</p>
+   </div>
   </section>
  </section>
 </section>
