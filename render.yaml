@@ -21,4 +21,3 @@ databases:
     databaseName: pinglet_chat_db
     user: pinglet_chat_db_user
     postgresMajorVersion: "18"
-    diskSizeGB: 1
