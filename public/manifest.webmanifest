@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Pinglet — Your people, your space",
+  "short_name": "Pinglet",
+  "description": "Private friend chats, friendship labels and mini games.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#10131c",
+  "theme_color": "#10131c",
+  "categories": ["social", "communication", "games"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
