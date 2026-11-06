@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10131c"><title>Pinglet — your people, your space</title>
+<link rel="stylesheet" href="/style.css"><script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+<main id="app">
+<section class="auth-card" id="auth">
+  <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
+  <p class="eyebrow">YOUR PEOPLE. YOUR SPACE.</p>
+  <h1>Good conversations<br><em>stay between you.</em></h1>
+  <p class="muted">A little place for your friends, shared jokes and everyday hellos.</p>
+  <div class="tabs"><button class="tab active" data-tab="create">Create account</button><button class="tab" data-tab="login">Sign in</button></div>
+  <form id="authForm">
+    <label id="nameWrap">Your name<input id="name" maxlength="24" placeholder="What should friends call you?" required></label>
+    <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" placeholder="Your 14-character code"></label>
+    <label>Password<input id="password" type="password" minlength="8" maxlength="128" placeholder="At least 8 characters" required></label>
+    <button class="primary wide" id="authSubmit">Create my space →</button>
+  </form>
+  <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError"></p>
+</section>
+<section id="workspace" class="workspace hidden">
+ <aside class="sidebar">
+  <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
+  <div class="profile"><div class="avatar" id="myAvatar">M</div><div class="profile-name"><b id="myName">You</b><small id="myCode">FRIEND CODE</small></div><button id="copyCode" class="icon-btn" title="Copy friend code">▢</button></div>
+  <div class="side-title">YOUR PEOPLE <button id="addFriend" class="plus">+</button></div>
+  <div id="friends" class="friends"><p class="empty">Your circle starts here.<br>Add someone using their code.</p></div>
+  <div class="side-bottom"><button id="gamesNav" class="nav-btn">🎮 &nbsp; Mini games</button><button id="logout" class="nav-btn">↪ &nbsp; Sign out</button></div>
+ </aside>
+ <section class="main-panel">
+  <header class="topbar"><div><div class="eyebrow" id="contextEyebrow">YOUR PRIVATE SPACE</div><h2 id="contextTitle">A little more connected.</h2></div><div class="secure-pill">⚠ EXPERIMENTAL · TEST ONLY</div></header>
+  <section id="welcome" class="welcome"><div class="welcome-art">✳</div><h2>Make room for your people.</h2><p>Share your unique friend code. Start a chat. Give your friendships their own little title.</p><button class="primary" id="welcomeAdd">＋ Add your first friend</button><div class="feature-row"><span>🔐 Experimental encryption</span><span>♡ Personal labels</span><span>🎮 Mini games</span></div></section>
+  <section id="chat" class="chat hidden">
+   <div class="friend-head"><div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div><div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label">✎</button></div></div>
+   <div id="messages" class="messages"></div>
+   <form id="sendForm" class="composer"><input id="messageInput" maxlength="2000" placeholder="Write something nice…" autocomplete="off"><button class="send" type="submit">↑</button></form>
+   <p class="composer-note">Experimental encryption only. Friend identity keys are not verified.</p>
+  </section>
+  <section id="games" class="games hidden">
+   <div class="game-card"><div class="game-icon">✊</div><p class="eyebrow">QUICK PLAY</p><h2>Rock, paper, scissors</h2><p class="muted">A tiny game while you catch up.</p>
+    <div class="choices"><button data-choice="rock">✊<small>Rock</small></button><button data-choice="paper">✋<small>Paper</small></button><button data-choice="scissors">✌️<small>Scissors</small></button></div><h3 id="gameResult">Choose your move.</h3><button id="resetGame" class="ghost">Play again</button>
+   </div>
+   <div class="game-card game-tip"><div class="game-icon">🧩</div><p class="eyebrow">COMING TO THE CIRCLE</p><h2>More mini games</h2><p class="muted">This demo includes a quick solo game. Multiplayer games are not included yet.</p></div>
+  </section>
+ </section>
+</section>
+</main>
+<div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Find friend →</button></form><p id="modalError" class="error"></p></div></div>
+<script src="/app.js"></script>
+</body></html>
