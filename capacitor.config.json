@@ -1,0 +1,13 @@
+{
+  "appId": "com.pinglet.chat",
+  "appName": "Pinglet",
+  "webDir": "public",
+  "server": {
+    "url": "https://pinglet-chat-live.onrender.com",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}
