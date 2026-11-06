@@ -98,6 +98,7 @@ app.post("/api/register", authLimiter, async (req, res) => {
     do { code = friendCode(); } while ((await pool.query("SELECT 1 FROM users WHERE code=$1", [code])).rowCount);
     const id = crypto.randomUUID();
     await pool.query("INSERT INTO users(id,name,code,password,pubkey) VALUES($1,$2,$3,$4,$5::jsonb)", [id, name, code, await bcrypt.hash(password, 12), JSON.stringify(pubkey)]);
+    meNameCache.set(id, name);
     const user = { id, name, code, pubkey };
     res.json({ token: tokenFor(user), user });
   } catch (error) {
