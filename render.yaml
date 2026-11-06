@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: pinglet-chat-live
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pinglet-chat-db
+          property: connectionString
+
+databases:
+  - name: pinglet-chat-db
+    plan: free
+    region: singapore
+    databaseName: pinglet_chat_db
+    user: pinglet_chat_db_user
+    postgresMajorVersion: "18"
+    diskSizeGB: 1
