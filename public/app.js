@@ -340,6 +340,7 @@ $("#modalClose").addEventListener("click", () => $("#modal").classList.add("hidd
 $("#modal").addEventListener("click", event => { if (event.target.id === "modal") $("#modal").classList.add("hidden"); });
 $("#modalForm").addEventListener("submit", async event => {
   event.preventDefault();
+  if (event.currentTarget.dataset.kind === "label") return;
   try {
     const data = await api("/friend-requests", { method: "POST", body: JSON.stringify({ code: $("#modalInput").value.trim().toUpperCase() }) });
     $("#modal").classList.add("hidden");
