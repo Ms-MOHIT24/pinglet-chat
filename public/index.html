@@ -24,14 +24,21 @@
 <section id="workspace" class="workspace hidden">
  <aside class="sidebar">
   <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
-  <div class="profile"><div class="avatar" id="myAvatar">M</div><div class="profile-name"><b id="myName">You</b><small id="myCode">FRIEND CODE</small></div><button id="copyCode" class="icon-btn" title="Copy friend code">▢</button></div>
+  <div class="profile">
+    <div class="avatar" id="myAvatar">M</div>
+    <div class="profile-name"><b id="myName">You</b><small id="myCode">FRIEND CODE</small></div>
+    <button id="shareQr" class="icon-btn" title="Show your QR invite">▦</button>
+    <button id="copyCode" class="icon-btn" title="Copy friend code">▢</button>
+  </div>
   <div class="side-title">YOUR PEOPLE <button id="addFriend" class="plus">+</button></div>
-  <div id="friends" class="friends"><p class="empty">Your circle starts here.<br>Add someone using their code.</p></div>
+  <div id="friends" class="friends"><p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p></div>
+  <div class="side-title requests-title">FRIEND REQUESTS <span id="requestCount" class="count-badge">0</span></div>
+  <div id="requests" class="requests"><p class="empty">No new requests.</p></div>
   <div class="side-bottom"><button id="gamesNav" class="nav-btn">🎮 &nbsp; Mini games</button><button id="logout" class="nav-btn">↪ &nbsp; Sign out</button></div>
  </aside>
  <section class="main-panel">
   <header class="topbar"><div><div class="eyebrow" id="contextEyebrow">YOUR PRIVATE SPACE</div><h2 id="contextTitle">A little more connected.</h2></div><div class="secure-pill">⚠ EXPERIMENTAL · TEST ONLY</div></header>
-  <section id="welcome" class="welcome"><div class="welcome-art">✳</div><h2>Make room for your people.</h2><p>Share your unique friend code. Start a chat. Give your friendships their own little title.</p><button class="primary" id="welcomeAdd">＋ Add your first friend</button><div class="feature-row"><span>🔐 Experimental encryption</span><span>♡ Personal labels</span><span>🎮 Mini games</span></div></section>
+  <section id="welcome" class="welcome"><div class="welcome-art">✳</div><h2>Make room for your people.</h2><p>Share your QR invite or friend code. Once a friend request is accepted, they stay saved here.</p><button class="primary" id="welcomeAdd">＋ Add a friend</button><div class="feature-row"><span>🔐 Experimental encryption</span><span>♡ Saved friendships</span><span>🎮 Mini games</span></div></section>
   <section id="chat" class="chat hidden">
    <div class="friend-head"><div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div><div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label">✎</button></div></div>
    <div id="messages" class="messages"></div>
@@ -47,6 +54,6 @@
  </section>
 </section>
 </main>
-<div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Find friend →</button></form><p id="modalError" class="error"></p></div></div>
+<div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Send friend request →</button></form><div id="qrShareContent" class="qr-share hidden"></div><p id="modalError" class="error"></p></div></div>
 <script src="/app.js"></script>
 </body></html>
