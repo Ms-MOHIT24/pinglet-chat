@@ -1,7 +1,13 @@
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
-let mode = "create", friends = [], privateKey = null;
+let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
+let snakePeerId = null, snakeState = null;
 const encoder = new TextEncoder(), decoder = new TextDecoder();
+const inviteMatch = location.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
+if (inviteMatch) {
+  sessionStorage.setItem("pinglet_pending_invite", inviteMatch[1].toUpperCase());
+  history.replaceState({}, "", "/");
+}
 
 async function api(path, options = {}) {
   const response = await fetch("/api" + path, {
@@ -63,8 +69,18 @@ async function decryptMessage(message, friend) {
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
+function toast(message) {
+  let node = $("#toast");
+  if (!node) {
+    node = document.createElement("div"); node.id = "toast"; node.className = "toast";
+    document.body.appendChild(node);
+  }
+  node.textContent = message; node.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => node.classList.remove("show"), 3200);
+}
 function show(view) {
   ["welcome", "chat", "games"].forEach(id => $("#" + id).classList.toggle("hidden", id !== view));
+  if (view === "games") drawSnake();
 }
 function setAuthTab(next) {
   mode = next;
@@ -93,7 +109,7 @@ $("#authForm").addEventListener("submit", async (event) => {
       const data = await api("/login", { method: "POST", body: JSON.stringify({ code: $("#code").value, password: $("#password").value }) });
       privateKey = await readPrivateKey();
       if (!privateKey) {
-        $("#authError").textContent = "This browser has no saved encryption key for this account. Account/device recovery is not available in this demo.";
+        $("#authError").textContent = "This browser has no saved encryption key for this account. Device recovery is not available in this demo.";
         return;
       }
       await finishLogin(data);
@@ -101,7 +117,6 @@ $("#authForm").addEventListener("submit", async (event) => {
   } catch (error) { $("#authError").textContent = error.message; }
   finally { $("#authSubmit").disabled = false; }
 });
-
 async function finishLogin(data) {
   token = data.token; me = data.user;
   localStorage.setItem("pinglet_token", token);
@@ -112,19 +127,33 @@ async function boot() {
     const data = await api("/me");
     me = data.user;
     privateKey = privateKey || await readPrivateKey();
-    if (!privateKey) throw new Error("Encryption key missing on this browser. Sign in on the browser where you created your account.");
+    if (!privateKey) throw new Error("Encryption key missing on this browser. Sign in on the browser where you created the account.");
     $("#auth").classList.add("hidden");
     $("#workspace").classList.remove("hidden");
     $("#myName").textContent = me.name;
     $("#myCode").textContent = me.code;
     $("#myAvatar").textContent = me.name.charAt(0).toUpperCase();
+    if (socket) socket.disconnect();
     socket = io({ auth: { token } });
-    socket.on("message", async (message) => {
+    socket.on("message", async message => {
       if (peer && (message.sender === peer.id || message.recipient === peer.id)) await loadMessages();
     });
+    socket.on("friend-request", async () => { await loadRequests(); toast("You have a new friend request."); });
+    socket.on("friendship", async () => { await loadFriends(); await loadRequests(); toast("A new friend was added to your circle."); });
     socket.on("connect_error", () => { $("#contextEyebrow").textContent = "RECONNECTING"; });
     socket.on("connect", () => { if (peer) $("#contextEyebrow").textContent = "YOUR CONVERSATION"; });
-    renderFriends();
+    socket.on("snake:invite", payload => {
+      if (payload.fromId === me.id) return;
+      pendingSnakeInvite = payload.fromId;
+      $("#snakeInviteText").textContent = (payload.fromName || "Your friend") + " invited you to Snake Duel.";
+      $("#snakeInviteBanner").classList.remove("hidden");
+    });
+    socket.on("snake:state", state => { snakeState = state; updateSnakeUI(); });
+    socket.on("snake:error", err => toast(err.message || "Snake Duel error."));
+    await loadFriends();
+    await loadRequests();
+    await processPendingInvite();
+    updateSnakeUI();
   } catch (error) {
     localStorage.removeItem("pinglet_token");
     token = null;
@@ -133,53 +162,47 @@ async function boot() {
     $("#authError").textContent = error.message;
   }
 }
-$("#copyCode").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(me.code); $("#copyCode").textContent = "✓"; setTimeout(() => $("#copyCode").textContent = "▢", 1200); }
-  catch { $("#authError").textContent = "Clipboard access is unavailable. Your code is " + me.code; }
-});
-
-function openModal(kind) {
-  $("#modal").classList.remove("hidden");
-  $("#modalError").textContent = "";
-  $("#modalEyebrow").textContent = kind === "tag" ? "MAKE IT YOURS" : "GROW YOUR CIRCLE";
-  $("#modalTitle").textContent = kind === "tag" ? "Choose a friendship label" : "Add a friend";
-  $("#modalText").textContent = kind === "tag" ? "This label is private to you." : "Enter their unique 14-character Pinglet code.";
-  $("#modalLabel").innerHTML = kind === "tag"
-    ? 'Friendship label<select id="tagSelect"><option>Friend</option><option>True Friend</option><option>Bestie</option><option>Love</option><option>Partner in Crime</option><option>My Person</option></select>'
-    : 'Friend code<input id="modalInput" placeholder="14-character code" maxlength="14" required>';
-  $("#modalSubmit").textContent = kind === "tag" ? "Save label" : "Find friend →";
-  $("#modalForm").dataset.kind = kind;
-}
-$("#addFriend").addEventListener("click", () => openModal("friend"));
-$("#welcomeAdd").addEventListener("click", () => openModal("friend"));
-$("#editTag").addEventListener("click", () => openModal("tag"));
-$("#modalClose").addEventListener("click", () => $("#modal").classList.add("hidden"));
-$("#modal").addEventListener("click", event => { if (event.target.id === "modal") $("#modal").classList.add("hidden"); });
-
-$("#modalForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function processPendingInvite() {
+  const code = sessionStorage.getItem("pinglet_pending_invite");
+  if (!code) return;
   try {
-    if (event.currentTarget.dataset.kind === "tag") {
-      const tag = $("#tagSelect").value;
-      localStorage.setItem("tag_" + peer.id, tag);
-      $("#peerTag").textContent = tag;
-      $("#modal").classList.add("hidden");
-      renderFriends();
-      return;
+    const result = await api("/friend-requests", { method: "POST", body: JSON.stringify({ code }) });
+    sessionStorage.removeItem("pinglet_pending_invite");
+    if (result.status === "friends") {
+      await loadFriends();
+      toast("You're already friends with " + result.friend.name + ".");
+      const saved = friends.find(f => f.id === result.friend.id);
+      if (saved) await openPeer(saved);
+    } else {
+      toast("Friend request sent to " + result.friend.name + "!");
+      await loadRequests();
     }
-    const data = await api("/lookup/" + encodeURIComponent($("#modalInput").value.trim().toUpperCase()));
-    if (data.user.id === me.id) throw new Error("That's your own friend code.");
-    if (!friends.some(friend => friend.id === data.user.id)) friends.push(data.user);
-    renderFriends();
-    $("#modal").classList.add("hidden");
-    await openPeer(data.user);
-  } catch (error) { $("#modalError").textContent = error.message; }
-});
+  } catch (error) { toast("Invite could not be used: " + error.message); }
+}
+async function loadFriends() {
+  const data = await api("/friends");
+  friends = data.friends || [];
+  renderFriends();
+  if (peer) {
+    const updated = friends.find(f => f.id === peer.id);
+    if (updated) {
+      peer = updated;
+      $("#peerTag").textContent = updated.label || "Friend";
+    } else {
+      peer = null; show("welcome");
+    }
+  }
+  updateSnakeUI();
+}
+async function loadRequests() {
+  const data = await api("/friend-requests");
+  renderRequests(data.incoming || [], data.outgoing || []);
+}
 function renderFriends() {
   const list = $("#friends");
   list.innerHTML = "";
   if (!friends.length) {
-    list.innerHTML = '<p class="empty">Your circle starts here.<br>Add someone using their code.</p>';
+    list.innerHTML = '<p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p>';
     return;
   }
   friends.forEach(friend => {
@@ -187,9 +210,46 @@ function renderFriends() {
     button.className = "friend" + (peer && peer.id === friend.id ? " active" : "");
     button.innerHTML = '<span class="avatar">' + escapeHtml(friend.name.charAt(0).toUpperCase()) +
       '</span><span><b>' + escapeHtml(friend.name) + '</b><small>' + escapeHtml(friend.code) +
-      '</small></span><span class="tag">' + escapeHtml(localStorage.getItem("tag_" + friend.id) || "Friend") + '</span>';
+      '</small></span><span class="tag">' + escapeHtml(friend.label || "Friend") + '</span>';
     button.addEventListener("click", () => openPeer(friend));
     list.appendChild(button);
+  });
+}
+function renderRequests(incoming, outgoing) {
+  const list = $("#requests");
+  list.innerHTML = "";
+  $("#requestCount").textContent = String(incoming.length);
+  if (!incoming.length && !outgoing.length) {
+    list.innerHTML = '<p class="empty">No new requests.</p>';
+    return;
+  }
+  incoming.forEach(request => {
+    const item = document.createElement("div");
+    item.className = "request-item";
+    const name = document.createElement("b"); name.textContent = request.name;
+    const code = document.createElement("small"); code.textContent = request.code + " wants to connect";
+    const actions = document.createElement("div"); actions.className = "request-actions";
+    const accept = document.createElement("button"); accept.className = "mini-accept"; accept.textContent = "Accept";
+    accept.addEventListener("click", async () => {
+      accept.disabled = true;
+      try {
+        await api("/friend-requests/" + request.id + "/accept", { method: "POST", body: "{}" });
+        await loadFriends(); await loadRequests(); toast(request.name + " is now saved in your friends.");
+      } catch (error) { toast(error.message); accept.disabled = false; }
+    });
+    const decline = document.createElement("button"); decline.className = "mini-decline"; decline.textContent = "×";
+    decline.title = "Decline request";
+    decline.addEventListener("click", async () => {
+      try { await api("/friend-requests/" + request.id + "/decline", { method: "POST", body: "{}" }); await loadRequests(); }
+      catch (error) { toast(error.message); }
+    });
+    actions.append(accept, decline); item.append(name, code, actions); list.appendChild(item);
+  });
+  outgoing.forEach(request => {
+    const item = document.createElement("div"); item.className = "request-item outgoing";
+    const name = document.createElement("b"); name.textContent = request.name;
+    const code = document.createElement("small"); code.textContent = "Request sent · waiting";
+    item.append(name, code); list.appendChild(item);
   });
 }
 async function openPeer(friend) {
@@ -199,30 +259,29 @@ async function openPeer(friend) {
   $("#peerName").textContent = friend.name;
   $("#peerCode").textContent = friend.code;
   $("#peerAvatar").textContent = friend.name.charAt(0).toUpperCase();
-  $("#peerTag").textContent = localStorage.getItem("tag_" + friend.id) || "Friend";
+  $("#peerTag").textContent = friend.label || "Friend";
   show("chat");
   renderFriends();
   await loadMessages();
+  updateSnakeUI();
 }
 async function loadMessages() {
   if (!peer) return;
   try {
     const data = await api("/messages/" + peer.id);
-    const list = $("#messages");
-    list.innerHTML = "";
+    const list = $("#messages"); list.innerHTML = "";
     for (const message of data.messages) {
       const bubble = document.createElement("div");
       bubble.className = "bubble " + (message.sender === me.id ? "mine" : "theirs");
       bubble.textContent = await decryptMessage(message, peer);
       const time = document.createElement("time");
-      time.textContent = new Date(message.created + "Z").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      bubble.appendChild(time);
-      list.appendChild(bubble);
+      time.textContent = new Date(message.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      bubble.appendChild(time); list.appendChild(bubble);
     }
     list.scrollTop = list.scrollHeight;
-  } catch (error) { console.error(error); }
+  } catch (error) { toast(error.message); }
 }
-$("#sendForm").addEventListener("submit", async (event) => {
+$("#sendForm").addEventListener("submit", async event => {
   event.preventDefault();
   const text = $("#messageInput").value.trim();
   if (!text || !peer) return;
@@ -231,18 +290,185 @@ $("#sendForm").addEventListener("submit", async (event) => {
     const encrypted = await encryptMessage(text, peer);
     await api("/messages", { method: "POST", body: JSON.stringify({ recipient: peer.id, ...encrypted }) });
     await loadMessages();
-  } catch (error) { alert(error.message); }
+  } catch (error) { toast(error.message); }
+});
+$("#copyCode").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(me.code); toast("Friend code copied."); }
+  catch { toast("Your friend code is " + me.code); }
+});
+function showAddFriendModal() {
+  $("#modal").classList.remove("hidden");
+  $("#modalEyebrow").textContent = "GROW YOUR CIRCLE";
+  $("#modalTitle").textContent = "Add a friend";
+  $("#modalText").textContent = "Send a friend request using their unique 14-character code.";
+  $("#modalForm").classList.remove("hidden");
+  $("#qrShareContent").classList.add("hidden");
+  $("#modalLabel").innerHTML = 'Friend code<input id="modalInput" placeholder="14-character code" maxlength="14" required>';
+  $("#modalSubmit").textContent = "Send friend request →";
+  $("#modalError").textContent = "";
+  $("#modalForm").dataset.kind = "friend";
+}
+async function showQrModal() {
+  $("#modal").classList.remove("hidden");
+  $("#modalEyebrow").textContent = "SHARE YOUR PINGLET";
+  $("#modalTitle").textContent = "Your personal QR";
+  $("#modalText").textContent = "Friends can scan this to send you a friend request.";
+  $("#modalForm").classList.add("hidden");
+  $("#modalError").textContent = "";
+  const content = $("#qrShareContent");
+  content.classList.remove("hidden");
+  content.innerHTML = '<p class="muted">Making your QR invite…</p>';
+  try {
+    const data = await api("/me/invite-qr");
+    content.innerHTML = '<img class="invite-qr" alt="Your Pinglet friend invite QR code" src="' + data.qr + '">' +
+      '<p class="qr-code-text">YOUR FRIEND CODE<br><strong>' + escapeHtml(me.code) + '</strong></p>' +
+      '<p class="qr-link">' + escapeHtml(data.url) + '</p>';
+    const copy = document.createElement("button"); copy.className = "ghost wide"; copy.textContent = "Copy invite link";
+    copy.addEventListener("click", async () => { await navigator.clipboard.writeText(data.url); toast("Invite link copied."); });
+    const share = document.createElement("button"); share.className = "primary wide"; share.textContent = "Share invite";
+    share.addEventListener("click", async () => {
+      if (navigator.share) await navigator.share({ title: "Join me on Pinglet", text: "Scan or open my Pinglet invite.", url: data.url });
+      else { await navigator.clipboard.writeText(data.url); toast("Invite link copied."); }
+    });
+    content.append(copy, share);
+  } catch (error) { content.innerHTML = ""; $("#modalError").textContent = error.message; }
+}
+$("#addFriend").addEventListener("click", showAddFriendModal);
+$("#welcomeAdd").addEventListener("click", showAddFriendModal);
+$("#shareQr").addEventListener("click", showQrModal);
+$("#modalClose").addEventListener("click", () => $("#modal").classList.add("hidden"));
+$("#modal").addEventListener("click", event => { if (event.target.id === "modal") $("#modal").classList.add("hidden"); });
+$("#modalForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  try {
+    const data = await api("/friend-requests", { method: "POST", body: JSON.stringify({ code: $("#modalInput").value.trim().toUpperCase() }) });
+    $("#modal").classList.add("hidden");
+    if (data.status === "friends") {
+      await loadFriends();
+      toast("You're already friends with " + data.friend.name + ".");
+    } else {
+      await loadRequests();
+      toast("Friend request sent to " + data.friend.name + ".");
+    }
+  } catch (error) { $("#modalError").textContent = error.message; }
 });
 $("#gamesNav").addEventListener("click", () => {
   show("games"); $("#contextEyebrow").textContent = "A LITTLE BREAK"; $("#contextTitle").textContent = "Play something.";
 });
+$("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
+
+/* Rock, Paper, Scissors */
 document.querySelectorAll("[data-choice]").forEach(button => button.addEventListener("click", () => {
   const mine = button.dataset.choice;
   const other = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
-  const win = mine === other ? "It's a tie!" : ({ rock: "scissors", paper: "rock", scissors: "paper" }[mine] === other ? "You win! 🎉" : "The computer wins!");
-  $("#gameResult").textContent = "You: " + mine + " · Opponent: " + other + " — " + win;
+  const result = mine === other ? "It's a tie!" : ({ rock: "scissors", paper: "rock", scissors: "paper" }[mine] === other ? "You win! 🎉" : "The computer wins!");
+  $("#gameResult").textContent = "You: " + mine + " · Opponent: " + other + " — " + result;
 }));
 $("#resetGame").addEventListener("click", () => $("#gameResult").textContent = "Choose your move.");
-$("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
 
+/* Online two-player Snake Duel */
+function updateSnakeUI() {
+  const canInvite = !!peer && friends.some(f => f.id === peer.id);
+  $("#snakeJoin").disabled = !canInvite;
+  $("#snakeJoin").textContent = canInvite ? "Invite " + peer.name + " to play" : "Open a saved friend's chat first";
+  $("#snakeHelp").textContent = canInvite
+    ? "You're playing " + peer.name + ". Invite them; both snakes appear when they join."
+    : "Open a saved friend's chat first, then invite them here. The friend must accept your request before playing.";
+  if (snakeState) {
+    const mePlayer = snakeState.players.find(p => p.id === me.id);
+    const friendPlayer = snakeState.players.find(p => p.id !== me.id);
+    $("#snakeYouScore").textContent = "YOU · " + (mePlayer ? mePlayer.score : 0);
+    $("#snakeFriendScore").textContent = "FRIEND · " + (friendPlayer ? friendPlayer.score : 0);
+    const overlay = $("#snakeOverlay");
+    if (snakeState.status === "waiting") {
+      overlay.classList.remove("hidden");
+      overlay.innerHTML = "<b>Waiting for friend…</b><span>Ask your friend to open Pinglet and join your Snake invite.</span>";
+      $("#snakeStatus").textContent = "Room open · waiting for the other player";
+      $("#snakeRestart").classList.add("hidden");
+    } else if (snakeState.status === "finished") {
+      overlay.classList.remove("hidden");
+      const outcome = snakeState.winner === "draw" ? "It's a draw!" : snakeState.winner === me.id ? "You win! 🎉" : "Your friend wins!";
+      overlay.innerHTML = "<b>" + outcome + "</b><span>Both players can restart the duel.</span>";
+      $("#snakeStatus").textContent = outcome;
+      $("#snakeRestart").classList.remove("hidden");
+    } else {
+      overlay.classList.add("hidden");
+      $("#snakeStatus").textContent = "Game on! Avoid the walls and both snakes.";
+      $("#snakeRestart").classList.add("hidden");
+    }
+  } else {
+    $("#snakeYouScore").textContent = "YOU · 0";
+    $("#snakeFriendScore").textContent = "FRIEND · 0";
+    $("#snakeOverlay").classList.remove("hidden");
+    $("#snakeOverlay").innerHTML = "<b>Ready to play?</b><span>Invite your selected friend to join this room.</span>";
+  }
+  drawSnake();
+}
+function joinSnake(friendId) {
+  const friend = friends.find(f => f.id === friendId);
+  if (!friend || !socket) { toast("Choose a saved friend and connect first."); return; }
+  peer = friend;
+  snakePeerId = friend.id;
+  snakeState = null;
+  show("games");
+  $("#contextEyebrow").textContent = "ONLINE 1 VS 1";
+  $("#contextTitle").textContent = "Snake Duel with " + friend.name;
+  updateSnakeUI();
+  $("#snakeStatus").textContent = "Opening your game room…";
+  socket.emit("snake:join", { peerId: friend.id });
+}
+$("#snakeJoin").addEventListener("click", () => { if (peer) joinSnake(peer.id); });
+$("#acceptSnakeInvite").addEventListener("click", () => {
+  const id = pendingSnakeInvite;
+  pendingSnakeInvite = null;
+  $("#snakeInviteBanner").classList.add("hidden");
+  if (id) joinSnake(id);
+});
+$("#declineSnakeInvite").addEventListener("click", () => {
+  pendingSnakeInvite = null; $("#snakeInviteBanner").classList.add("hidden");
+});
+$("#snakeRestart").addEventListener("click", () => {
+  if (socket && snakePeerId) socket.emit("snake:restart", { peerId: snakePeerId });
+});
+function sendSnakeDirection(direction) {
+  if (socket && snakePeerId && snakeState && snakeState.status === "playing") {
+    socket.emit("snake:direction", { peerId: snakePeerId, direction });
+  }
+}
+document.querySelectorAll("[data-dir]").forEach(button => button.addEventListener("click", () => sendSnakeDirection(button.dataset.dir)));
+document.addEventListener("keydown", event => {
+  if ($("#games").classList.contains("hidden")) return;
+  const directions = { ArrowUp:"up", w:"up", ArrowDown:"down", s:"down", ArrowLeft:"left", a:"left", ArrowRight:"right", d:"right" };
+  const direction = directions[event.key] || directions[event.key.toLowerCase()];
+  if (direction) { event.preventDefault(); sendSnakeDirection(direction); }
+});
+function drawSnake() {
+  const canvas = $("#snakeCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d"), width = canvas.width, height = canvas.height;
+  ctx.fillStyle = "#101522"; ctx.fillRect(0, 0, width, height);
+  const cols = snakeState?.width || 24, rows = snakeState?.height || 16;
+  const cellW = width / cols, cellH = height / rows;
+  ctx.strokeStyle = "rgba(170,180,210,.08)"; ctx.lineWidth = 1;
+  for (let x=0;x<=cols;x++) { ctx.beginPath(); ctx.moveTo(x*cellW,0); ctx.lineTo(x*cellW,height); ctx.stroke(); }
+  for (let y=0;y<=rows;y++) { ctx.beginPath(); ctx.moveTo(0,y*cellH); ctx.lineTo(width,y*cellH); ctx.stroke(); }
+  if (!snakeState) return;
+  if (snakeState.food) {
+    ctx.fillStyle = "#ff7c87"; ctx.beginPath();
+    ctx.arc((snakeState.food.x+.5)*cellW,(snakeState.food.y+.5)*cellH,Math.min(cellW,cellH)*.32,0,Math.PI*2); ctx.fill();
+  }
+  snakeState.players.forEach((player,index) => {
+    const fill = index===0 ? "#c7f36b" : "#a99aff";
+    player.body.forEach((part,partIndex) => {
+      ctx.fillStyle = fill;
+      const inset = partIndex===0 ? 2 : 3;
+      ctx.beginPath();
+      ctx.roundRect(part.x*cellW+inset,part.y*cellH+inset,cellW-inset*2,cellH-inset*2,5);
+      ctx.fill();
+    });
+  });
+}
 if (token) boot();
+else if (sessionStorage.getItem("pinglet_pending_invite")) {
+  $("#authHint").textContent = "You have a friend invite waiting. Create an account or sign in to send your request.";
+}
