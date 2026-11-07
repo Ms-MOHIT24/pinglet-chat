@@ -1,5 +1,5 @@
-const CACHE_NAME = "pinglet-shell-v13";
-const APP_SHELL = ["/", "/style.css", "/app.js", "/icon.svg", "/manifest.webmanifest"];
+const CACHE_NAME = "pinglet-shell-v14";
+const APP_SHELL = ["/", "/style.css", "/app.js", "/vendor/socket.io.js", "/vendor/jsQR.js", "/terms.html", "/privacy.html", "/child-safety.html", "/delete-account.html", "/icon.svg", "/manifest.webmanifest"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
   self.skipWaiting();
