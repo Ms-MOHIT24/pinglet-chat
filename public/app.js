@@ -18,17 +18,43 @@ if (inviteMatch) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch("/api" + path, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(options.headers || {}) }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(data.error || "Something went wrong.");
-    error.status = response.status;
-    throw error;
+  const method = String(options.method || "GET").toUpperCase();
+  const canRetry = method === "GET";
+  const retryDelays = [900, 1800, 3200, 5200, 8000, 11000];
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= (canRetry ? retryDelays.length : 0); attempt++) {
+    try {
+      const response = await fetch("/api" + path, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(options.headers || {}) }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) return data;
+
+      const error = new Error(data.error || "Something went wrong.");
+      error.status = response.status;
+      if (!canRetry || ![502, 503, 504].includes(response.status) || attempt === retryDelays.length) throw error;
+      lastError = error;
+    } catch (error) {
+      const isTransientNetworkError = !Number.isInteger(error.status) &&
+        (error instanceof TypeError || error.name === "AbortError" || error.name === "NetworkError");
+      if (!canRetry || (!isTransientNetworkError && ![502, 503, 504].includes(error.status)) || attempt === retryDelays.length) {
+        throw error;
+      }
+      lastError = error;
+    }
+
+    if (attempt === 0) {
+      const status = $("#connectionStatus");
+      if (status) setConnectionStatus("Waking up…", false);
+      const eyebrow = $("#contextEyebrow");
+      if (eyebrow) eyebrow.textContent = "RECONNECTING";
+    }
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
   }
-  return data;
+
+  throw lastError || new Error("Pinglet is taking longer than expected to respond. Please retry.");
 }
 function bytesToBase64(value) { return btoa(String.fromCharCode(...new Uint8Array(value))); }
 function base64ToBytes(value) { return Uint8Array.from(atob(value), c => c.charCodeAt(0)); }
