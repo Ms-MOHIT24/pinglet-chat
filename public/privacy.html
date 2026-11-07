@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10131c">
+  <title>Privacy Policy — Pinglet</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="policy-page">
+<main class="policy-shell">
+  <a class="policy-back" href="/">← Back to Pinglet</a>
+  <p class="eyebrow">PINGLET · YOUR DATA</p>
+  <h1>Privacy Policy</h1>
+  <p class="policy-updated">Draft for product review · 7 November 2026</p>
+  <p>This draft describes the information the current Pinglet code is designed to handle. The responsible service operator must verify it against the deployed infrastructure, set retention periods and contact details, and obtain appropriate legal review before public release.</p>
+  <h2>1. Information you provide</h2>
+  <ul>
+    <li>Account details: display name, unique friend code, password hash, and public encryption key. Passwords are hashed with bcrypt before storage; the plain password is not intended to be stored.</li>
+    <li>Connections: friend requests, accepted friendships, friend labels, and timestamps.</li>
+    <li>Messages: message ciphertext, encryption IV, sender and recipient identifiers, conversation identifier, and timestamp. Short voice clips are encoded inside the encrypted message payload.</li>
+    <li>Safety reports: the account being reported, report category, details you submit, reporter identifier, and report status. Message text is included only when you choose to report a message. Report details are stored as report text for moderation and are not covered by the chat encryption feature.</li>
+  </ul>
+  <h2>2. Device information and local storage</h2>
+  <p>The browser stores your sign-in token and theme/score preferences locally. The encryption private key is kept in this browser's IndexedDB and is not synchronised to another device. Clearing browser data or changing device can make previously stored messages unreadable. The service does not provide private-key recovery.</p>
+  <h2>3. How information is used</h2>
+  <p>Information is used to create and secure accounts, connect friends, deliver and display messages, operate games and calls, prevent abuse, process reports, and maintain service reliability. The application uses a hosting provider and a managed PostgreSQL database to operate the service. The QR scanning library is loaded from a content-delivery network; camera access is requested only when you start the scanner.</p>
+  <h2>4. Encryption and important limitations</h2>
+  <p>The current messaging design uses browser ECDH and AES-GCM. It is experimental, has not been independently audited, and does not authenticate or verify a contact's identity key. Voice messages use this same experimental design. Do not treat Pinglet as a secure or confidential messenger.</p>
+  <h2>5. Sharing and service providers</h2>
+  <p>Messages are delivered to their intended friend through the service. Service infrastructure providers process information needed to host the app and database. Reports are available to the service operator through a protected moderation endpoint. The operator must restrict access, keep credentials secret, and document any additional providers or disclosures before launch.</p>
+  <h2>6. Retention and deletion</h2>
+  <p>Account deletion removes the user record and, through database relationships, associated friendships, friend requests, and stored messages. A report about a deleted account can retain its submitted details while the reported-account identifier is removed; reports may be kept where necessary for safety review or legal obligations. A precise retention schedule and backup-deletion period must be set by the operator before public release. Deleting your account does not automatically erase a private key from other devices or browsers where it was previously stored.</p>
+  <p>Use <a href="/delete-account.html">Delete your Pinglet account</a> to request deletion from the web, or use Safety &amp; account inside the app.</p>
+  <h2>7. Children's privacy and safety</h2>
+  <p>Pinglet must not be released for a child or teen audience until the operator has implemented and staffed the applicable age, parental-consent, child-safety, reporting, and moderation requirements. See the <a href="/child-safety.html">Child Safety Standards</a>. Do not share a child's personal details in a report unless needed to protect them; never upload illegal sexual imagery.</p>
+  <h2>8. Security</h2>
+  <p>The service uses HTTPS in its hosted configuration and hashes account passwords. No online service can guarantee perfect security. Access to report data and production infrastructure should be limited to authorised personnel. The encryption design is experimental and must not be represented as independently verified end-to-end encryption.</p>
+  <h2>9. Contact and changes</h2>
+  <p>A monitored privacy and safety contact address, responsible operator identity, retention schedule, and process for privacy requests must be published here before release. They are not configured in this draft. The operator should update this policy whenever data handling changes.</p>
+  <p class="policy-note">This is a technical disclosure draft based on the current source code, not legal advice or a guarantee of compliance.</p>
+  <a class="policy-back" href="/">← Back to Pinglet</a>
+</main>
+</body>
+</html>
