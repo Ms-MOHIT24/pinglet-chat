@@ -127,9 +127,15 @@
    <div class="scanner-placeholder" id="scannerPlaceholder"><span>⌗</span><b>Your camera view will appear here</b><small>Allow camera access when your browser asks.</small></div>
    <div class="scanner-frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div>
   </div>
+  <div id="scannerResult" class="scanner-result hidden">
+   <span class="scanner-result-icon">✓</span><div><b>Pinglet invite found</b><small id="scannerFoundCode">FRIEND CODE</small></div>
+   <button id="confirmScannedInvite" class="primary" type="button">Send friend request ↗</button>
+   <button id="scannerAgain" class="ghost" type="button">Scan another</button>
+  </div>
   <p id="scannerStatus" class="scanner-status" role="status" aria-live="polite">Camera access is only used to read a QR code on this device.</p>
   <div class="scanner-actions">
    <button id="scannerTorch" class="ghost hidden" type="button">☼ Torch off</button>
+   <button id="scannerResume" class="ghost hidden" type="button">Start camera</button>
    <label class="scanner-upload">▧ Upload QR image<input id="qrImageInput" type="file" accept="image/*" capture="environment"></label>
    <button id="scannerManual" class="ghost" type="button">Enter code instead</button>
   </div>
