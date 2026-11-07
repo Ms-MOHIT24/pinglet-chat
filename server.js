@@ -299,6 +299,22 @@ function startSnakeGame(game) {
     broadcastSnake(game);
   }, snakeTickMs);
 }
+/* Private four-digit audio/video rooms. Signaling is relayed; media stays peer-to-peer. */
+const callRooms = new Map();
+const callJoinAttempts = new Map();
+const callRoomName = code => "call:" + code;
+const callRoomCapacity = 4;
+function leaveCallRoom(socket, notify = true) {
+  const code = socket.data.callRoomCode;
+  if (!code) return;
+  socket.data.callRoomCode = null;
+  socket.leave(callRoomName(code));
+  const room = callRooms.get(code);
+  if (!room) return;
+  room.participants.delete(socket.id);
+  if (notify) io.to(callRoomName(code)).emit("call:participant-left", { peerId: socket.id });
+  if (!room.participants.size) callRooms.delete(code);
+}
 io.use((socket,next) => {
   try { socket.user=jwt.verify(socket.handshake.auth.token,SECRET,{issuer:"pinglet",audience:"pinglet-web"}); next(); }
   catch { next(new Error("Unauthorized")); }
@@ -306,6 +322,69 @@ io.use((socket,next) => {
 io.on("connection", socket => {
   const userId=socket.user.id;
   socket.join(userId);
+
+  socket.on("call:create", ({ mode } = {}, reply) => {
+    const respond = typeof reply === "function" ? reply : () => {};
+    if (socket.data.callRoomCode) return respond({ ok: false, error: "Leave your current call before creating another room." });
+    if (mode !== "video" && mode !== "voice") return respond({ ok: false, error: "Choose a video or voice room." });
+    let code;
+    do { code = String(crypto.randomInt(0, 10000)).padStart(4, "0"); } while (callRooms.has(code));
+    const room = { code, mode, participants: new Map() };
+    room.participants.set(socket.id, { userId, name: meNameCache.get(userId) || "A Pinglet friend" });
+    callRooms.set(code, room);
+    socket.data.callRoomCode = code;
+    socket.join(callRoomName(code));
+    respond({ ok: true, code, mode, participants: [] });
+  });
+
+  socket.on("call:join", ({ code } = {}, reply) => {
+    const respond = typeof reply === "function" ? reply : () => {};
+    const now = Date.now();
+    let attempts = callJoinAttempts.get(userId);
+    if (!attempts || attempts.resetAt <= now) {
+      attempts = { count: 0, resetAt: now + 60_000 };
+      callJoinAttempts.set(userId, attempts);
+    }
+    if (attempts.count >= 8) return respond({ ok: false, error: "Too many room-code attempts. Please wait a minute and try again." });
+    attempts.count++;
+    const roomCode = typeof code === "string" ? code.trim() : "";
+    if (!/^\d{4}$/.test(roomCode)) return respond({ ok: false, error: "Enter the four-digit room code." });
+    if (socket.data.callRoomCode) return respond({ ok: false, error: "Leave your current call before joining another room." });
+    const room = callRooms.get(roomCode);
+    if (!room) return respond({ ok: false, error: "That room code is unavailable. Check the code or create a new room." });
+    if (room.participants.size >= callRoomCapacity) return respond({ ok: false, error: "This room is full (4 people maximum)." });
+    const existing = [...room.participants.entries()].map(([peerId, person]) => ({ peerId, userId: person.userId, name: person.name }));
+    room.participants.set(socket.id, { userId, name: meNameCache.get(userId) || "A Pinglet friend" });
+    socket.data.callRoomCode = roomCode;
+    socket.join(callRoomName(roomCode));
+    respond({ ok: true, code: roomCode, mode: room.mode, participants: existing });
+    socket.to(callRoomName(roomCode)).emit("call:participant-joined", {
+      peerId: socket.id, userId, name: meNameCache.get(userId) || "A Pinglet friend"
+    });
+  });
+
+  socket.on("call:signal", ({ toPeerId, description, candidate } = {}) => {
+    const code = socket.data.callRoomCode;
+    const room = code && callRooms.get(code);
+    if (!room || typeof toPeerId !== "string" || toPeerId === socket.id || !room.participants.has(toPeerId)) return;
+    const sender = room.participants.get(socket.id);
+    if (description && (["offer", "answer"].includes(description.type) && typeof description.sdp === "string" && description.sdp.length <= 20000)) {
+      io.to(toPeerId).emit("call:signal", { fromPeerId: socket.id, fromName: sender.name, description });
+    } else if (candidate && typeof candidate.candidate === "string" && candidate.candidate.length <= 4096) {
+      io.to(toPeerId).emit("call:signal", { fromPeerId: socket.id, fromName: sender.name, candidate });
+    }
+  });
+
+  socket.on("call:reaction", ({ emoji } = {}) => {
+    const code = socket.data.callRoomCode;
+    const room = code && callRooms.get(code);
+    const allowed = ["👏", "❤️", "😂", "🎉", "🔥", "👍"];
+    if (!room || !allowed.includes(emoji)) return;
+    const sender = room.participants.get(socket.id);
+    io.to(callRoomName(code)).emit("call:reaction", { emoji, name: sender.name });
+  });
+
+  socket.on("call:leave", () => leaveCallRoom(socket));
 
   socket.on("snake:join", async ({peerId}={}) => {
     try {
@@ -347,6 +426,7 @@ io.on("connection", socket => {
     }
   });
   socket.on("disconnect", () => {
+    leaveCallRoom(socket);
     for (const [key,game] of snakeRooms) {
       const set=game.sockets.get(userId);
       if (set) {
