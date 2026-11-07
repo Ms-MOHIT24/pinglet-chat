@@ -1,8 +1,8 @@
 {
   "name": "pinglet-chat",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "private": true,
-  "description": "Pinglet social chat with animated shared web and Android UI, per-friend chat drafts, wake-up resilient API reads, games, voice messages and private call rooms",
+  "description": "Pinglet social chat with account controls, user reporting and blocking, terms and privacy pages, games, voice messages and private call rooms",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
