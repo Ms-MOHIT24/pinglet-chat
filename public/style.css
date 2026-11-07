@@ -1100,3 +1100,29 @@ body[data-view="rooms"] #roomsNav>span{color:var(--accent)}
 @media(prefers-reduced-motion:reduce){
   .call-hero-mark,.call-reaction-burst{animation:none!important;transition:none!important}
 }
+
+/* Walkie-talkie push-to-talk message button */
+.walkie-button{
+  flex:none;min-width:98px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  border:1px solid rgba(124,228,220,.22);border-radius:13px;padding:6px 9px;
+  color:#c6fff7;background:linear-gradient(145deg,rgba(124,228,220,.11),rgba(185,163,255,.09));
+  transition:transform .16s,border-color .16s,background .16s,box-shadow .16s;touch-action:none;user-select:none
+}
+.walkie-button span{font-size:19px;line-height:1.1}
+.walkie-button small{font-size:6px;letter-spacing:.75px;font-weight:950;white-space:nowrap}
+.walkie-button:hover{border-color:rgba(124,228,220,.48);transform:translateY(-1px)}
+.walkie-button.recording{border-color:rgba(255,159,200,.6);color:#ffd6e5;background:rgba(255,105,155,.16);box-shadow:0 0 0 4px rgba(255,105,155,.08);animation:walkie-pulse .8s ease-in-out infinite alternate}
+.walkie-button.recording span{animation:walkie-mic .55s ease-in-out infinite alternate}
+@keyframes walkie-pulse{to{box-shadow:0 0 0 7px rgba(255,105,155,.04)}}
+@keyframes walkie-mic{to{transform:scale(1.16)}}
+.walkie-button:disabled{opacity:.5;cursor:wait}
+.voice-message-label{display:block;font-size:10px;font-weight:850;margin-bottom:7px}
+.voice-message-player{display:block;width:min(100%,270px);height:36px;max-width:100%;filter:saturate(.8)}
+.bubble.mine .voice-message-player{filter:sepia(.2) saturate(.9)}
+@media(max-width:700px){
+  .walkie-button{min-width:63px;padding:6px 5px;border-radius:11px}
+  .walkie-button span{font-size:17px}
+  .walkie-button small{font-size:5px;letter-spacing:.25px}
+  .voice-message-player{width:min(100%,230px)}
+}
+@media(prefers-reduced-motion:reduce){.walkie-button.recording,.walkie-button.recording span{animation:none!important}}
