@@ -237,6 +237,15 @@ async function boot() {
     await loadRequests();
     await processPendingInvite();
     updateSnakeUI();
+    if (location.pathname === "/games") {
+      show("games");
+      $("#contextEyebrow").textContent = "A LITTLE BREAK";
+      $("#contextTitle").textContent = "Rock, paper, scissors and more.";
+    } else if (location.pathname === "/call-rooms") {
+      show("rooms");
+      $("#contextEyebrow").textContent = "YOUR PRIVATE HANGOUT";
+      $("#contextTitle").textContent = "Voice and video rooms.";
+    }
   } catch (error) {
     // Keep a valid session during a temporary network/database outage.
     if (error.status === 401 || error.status === 404) {
@@ -895,9 +904,11 @@ function openGames(viewTitle = "Play something.") {
   $("#contextEyebrow").textContent = "A LITTLE BREAK";
   $("#contextTitle").textContent = viewTitle;
 }
-$("#gamesNav").addEventListener("click", () => openGames());
-$("#welcomeRps").addEventListener("click", () => openGames("Rock, paper, scissors"));
-$("#roomsNav").addEventListener("click", () => {
+$("#gamesNav").addEventListener("click", event => { event.preventDefault(); openGames(); });
+$("#welcomeRps").addEventListener("click", event => { event.preventDefault(); openGames("Rock, paper, scissors"); });
+$("#topGames").addEventListener("click", event => { event.preventDefault(); openGames("Rock, paper, scissors"); });
+$("#roomsNav").addEventListener("click", event => {
+  event.preventDefault();
   show("rooms");
   $("#contextEyebrow").textContent = "YOUR PRIVATE HANGOUT";
   $("#contextTitle").textContent = "Voice and video rooms.";
