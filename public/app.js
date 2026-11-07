@@ -128,6 +128,11 @@ function show(view) {
   ["homeNav", "gamesNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
   $("#requests").classList.remove("mobile-open");
   $("#requestsNav").setAttribute("aria-expanded", "false");
+  const panel = $("#" + view);
+  panel.classList.remove("view-enter");
+  void panel.offsetWidth;
+  panel.classList.add("view-enter");
+  panel.addEventListener("animationend", () => panel.classList.remove("view-enter"), { once: true });
   if (view === "games") drawSnake();
 }
 function setAuthTab(next) {
@@ -768,35 +773,111 @@ $("#sparkNext").addEventListener("click", () => {
 
 $("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
 
-/* Rock, Paper, Scissors — real local score, saved on this device. */
+/* Rock, Paper, Scissors — animated reveal with a local saved scoreboard. */
+let rpsBusy = false;
+const rpsIcons = { rock: "✊", paper: "✋", scissors: "✌️" };
+const rpsNames = { rock: "ROCK", paper: "PAPER", scissors: "SCISSORS" };
+const rpsBeats = { rock: "scissors", paper: "rock", scissors: "paper" };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 function renderRpsScore() {
   $("#rpsWins").textContent = String(rpsWins);
   $("#rpsRounds").textContent = String(rpsRounds);
   $("#rpsWinRate").textContent = (rpsRounds ? Math.round((rpsWins / rpsRounds) * 100) : 0) + "%";
 }
-renderRpsScore();
-document.querySelectorAll("[data-choice]").forEach(button => button.addEventListener("click", () => {
-  const mine = button.dataset.choice;
+function setRpsHands(player, opponent, playerLabel, opponentLabel) {
+  $("#rpsPlayerHand").textContent = player;
+  $("#rpsOpponentHand").textContent = opponent;
+  $("#rpsPlayerPick").textContent = playerLabel;
+  $("#rpsOpponentPick").textContent = opponentLabel;
+}
+function burstRpsConfetti() {
+  const layer = $("#rpsCelebration");
+  layer.replaceChildren();
+  for (let i = 0; i < 25; i++) {
+    const piece = document.createElement("i");
+    const angle = (Math.PI * 2 * i) / 25 + Math.random() * .25;
+    const distance = 46 + Math.random() * 115;
+    piece.className = "rps-confetti";
+    piece.style.setProperty("--dx", Math.cos(angle) * distance + "px");
+    piece.style.setProperty("--dy", Math.sin(angle) * distance + "px");
+    piece.style.setProperty("--spin", (Math.random() * 720 - 360) + "deg");
+    piece.style.setProperty("--delay", (Math.random() * 110) + "ms");
+    layer.appendChild(piece);
+  }
+  setTimeout(() => layer.replaceChildren(), 1250);
+}
+async function playRpsRound(mine, button) {
+  if (rpsBusy) return;
+  rpsBusy = true;
+  const arena = $("#rpsArena");
+  const buttons = [...document.querySelectorAll("[data-choice]")];
+  buttons.forEach(item => { item.disabled = true; item.classList.toggle("picked", item === button); });
+  $("#resetGame").disabled = true;
+  $("#gameResult").className = "rps-result is-playing";
+  $("#gameResult").textContent = "Get ready…";
+  $("#rpsCountdown").textContent = "READY?";
+  arena.dataset.state = "counting";
+  delete arena.dataset.result;
+  setRpsHands("✊", "✊", "YOU", "PINGLET");
+  const countWords = ["ROCK", "PAPER", "SCISSORS", "SHOOT!"];
+  for (const word of countWords) {
+    $("#rpsCountdown").textContent = word;
+    arena.classList.remove("rps-pulse");
+    void arena.offsetWidth;
+    arena.classList.add("rps-pulse");
+    await wait(390);
+  }
   const other = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
-  const won = ({ rock: "scissors", paper: "rock", scissors: "paper" }[mine] === other);
+  const won = rpsBeats[mine] === other;
   const tied = mine === other;
+  const outcome = tied ? "draw" : won ? "win" : "loss";
+  arena.dataset.state = "reveal";
+  arena.dataset.result = outcome;
+  setRpsHands(rpsIcons[mine], rpsIcons[other], rpsNames[mine], rpsNames[other]);
+  $("#rpsCountdown").textContent = tied ? "TIE!" : won ? "YOU WIN!" : "OOPS!";
+  void arena.offsetWidth;
+  arena.classList.add("rps-reveal");
   rpsRounds += 1;
   if (won) rpsWins += 1;
   localStorage.setItem("pinglet_rps_wins", String(rpsWins));
   localStorage.setItem("pinglet_rps_rounds", String(rpsRounds));
   renderRpsScore();
-  document.querySelectorAll("[data-choice]").forEach(item => item.classList.toggle("picked", item === button));
-  const names = { rock: "Rock", paper: "Paper", scissors: "Scissors" };
-  const result = tied ? "It's a tie!" : won ? "You win this round! ✨" : "The computer wins this round.";
-  $("#gameResult").textContent = "You picked " + names[mine] + " · Pinglet picked " + names[other] + " — " + result;
+  const result = tied ? "A perfect tie. Run it back?" : won ? "YOU WIN! The arena is yours ✨" : "Pinglet got this one. Your comeback starts now.";
+  $("#gameResult").className = "rps-result " + (won ? "is-win" : tied ? "is-draw" : "is-loss");
+  $("#gameResult").textContent = result;
+  if (won) burstRpsConfetti();
+  await wait(720);
+  arena.classList.remove("rps-reveal", "rps-pulse");
+  buttons.forEach(item => { item.disabled = false; });
+  $("#resetGame").disabled = false;
+  rpsBusy = false;
+}
+renderRpsScore();
+document.querySelectorAll("[data-choice]").forEach(button => button.addEventListener("click", () => {
+  playRpsRound(button.dataset.choice, button).catch(error => {
+    console.warn("Rock Paper Scissors animation failed:", error);
+    rpsBusy = false;
+    document.querySelectorAll("[data-choice]").forEach(item => { item.disabled = false; });
+    $("#resetGame").disabled = false;
+    $("#rpsArena").dataset.state = "idle";
+    $("#gameResult").textContent = "That round couldn't finish. Try again.";
+  });
 }));
 $("#resetGame").addEventListener("click", () => {
+  if (rpsBusy) return;
   rpsWins = 0; rpsRounds = 0;
   localStorage.setItem("pinglet_rps_wins", "0");
   localStorage.setItem("pinglet_rps_rounds", "0");
   renderRpsScore();
-  document.querySelectorAll("[data-choice]").forEach(item => item.classList.remove("picked"));
+  document.querySelectorAll("[data-choice]").forEach(item => { item.classList.remove("picked"); });
+  const arena = $("#rpsArena");
+  arena.dataset.state = "idle";
+  delete arena.dataset.result;
+  setRpsHands("✊", "✊", "YOU", "PINGLET");
+  $("#rpsCountdown").textContent = "READY?";
+  $("#gameResult").className = "rps-result";
   $("#gameResult").textContent = "Score cleared. Ready for another round?";
+  $("#rpsCelebration").replaceChildren();
 });
 
 /* Online two-player Snake Duel */
