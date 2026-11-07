@@ -1294,3 +1294,31 @@ body:before{
 
 /* Clear feedback when the chat composer has nothing ready to send. */
 .send:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.55);transform:none}
+
+
+/* Policy pages and account-safety controls */
+.policy-page{min-height:100vh;padding:34px 18px;background:var(--bg);color:var(--text)}
+.policy-shell{width:min(820px,100%);margin:0 auto;padding:clamp(22px,5vw,48px);border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:0 22px 70px #0002}
+.policy-shell h1{font-size:clamp(30px,6vw,46px);line-height:1.08;margin:12px 0}
+.policy-shell h2{font-size:19px;margin:30px 0 9px}
+.policy-shell p,.policy-shell li{font-size:14px;line-height:1.75;color:var(--muted)}
+.policy-shell li{margin:7px 0}
+.policy-shell ul{padding-left:22px}
+.policy-shell a{color:var(--accent);text-underline-offset:3px}
+.policy-shell .policy-back{display:inline-block;margin:8px 0 18px;color:var(--accent);font-weight:700;text-decoration:none}
+.policy-updated{font-size:11px!important;letter-spacing:.08em;text-transform:uppercase}
+.policy-note{margin:22px 0;padding:15px 17px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:13px;line-height:1.65;color:var(--muted)}
+.terms-consent{display:flex!important;align-items:flex-start;gap:10px;margin:12px 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.terms-consent input{flex:0 0 17px;width:17px;height:17px;margin:2px 0 0;accent-color:var(--accent)}
+.terms-consent a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+.blocked-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:7px 0;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}
+.blocked-row span{font-weight:700;font-size:13px}
+.danger{border:1px solid #b34c62!important;background:#932f48!important;color:#fff!important}
+.danger:disabled{opacity:.5;cursor:not-allowed}
+.delete-web-form{display:grid;gap:15px;margin:24px 0}
+.delete-web-form label:not(.terms-consent){display:grid;gap:7px;font-size:13px;color:var(--muted)}
+.delete-web-form input:not([type=checkbox]){width:100%;min-height:44px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text)}
+.report-message-button{display:inline-flex;align-items:center;margin-top:7px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:10px;cursor:pointer}
+.report-message-button:hover{border-color:var(--accent);color:var(--text)}
+.success-message{color:#72d69a;font-size:14px;line-height:1.6}
+@media(max-width:600px){.policy-page{padding:12px 8px}.policy-shell{padding:20px 16px;border-radius:15px}.policy-shell p,.policy-shell li{font-size:13px}}
