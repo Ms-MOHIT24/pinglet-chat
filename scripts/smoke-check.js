@@ -115,7 +115,7 @@ check("Policy and child-safety pages are present and accessible",
   html.includes('href="/privacy.html"'));
 const capacitor = JSON.parse(read("capacitor.config.json"));
 check("Android ships its own web UI instead of remote-loading the website",
-  !capacitor.server || !capacitor.server.url &&
+  (!capacitor.server || !capacitor.server.url) &&
   app.includes("const API_ORIGIN = isNativeShell ?") &&
   html.includes('src="https://pinglet-chat-live.onrender.com/socket.io/socket.io.js"') &&
   server.includes('"https://localhost"') &&
