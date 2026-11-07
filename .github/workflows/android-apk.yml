@@ -12,6 +12,10 @@ on:
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
+concurrency:
+  group: pinglet-android-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -22,6 +26,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check JavaScript syntax
+        run: node --check server.js && node --check public/app.js
+
 
       - name: Setup Node
         uses: actions/setup-node@v4
