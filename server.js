@@ -41,7 +41,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(helmet({ contentSecurityPolicy: { directives: {
-  defaultSrc: ["'self'"], scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://pinglet-chat-live.onrender.com"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
+  defaultSrc: ["'self'"], scriptSrc: ["'self'"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
   connectSrc: ["'self'", "https://pinglet-chat-live.onrender.com", "wss://pinglet-chat-live.onrender.com", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
   objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"]
 } } }));
