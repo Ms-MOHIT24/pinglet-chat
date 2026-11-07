@@ -25,3 +25,8 @@ The server listens on the port provided by the host (or port 3000 locally) and e
 ## Deployment and Android preview
 
 Render deploys the Node.js service from the `main` branch. The GitHub Actions workflow builds a debug APK after relevant app changes and publishes it as the `android-latest` preview release. It is a test build, not a Play Store release.
+
+
+## Animated mini-game
+
+Rock, Paper, Scissors includes an animated countdown and reveal stage, win/loss/tie reactions, a confetti burst on wins, and a score saved in the current browser. Motion respects the device's reduced-motion preference.
