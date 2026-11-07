@@ -125,6 +125,7 @@ function setConnectionStatus(label, connected) {
   node.innerHTML = '<i></i><span>' + escapeHtml(label) + '</span>';
 }
 function show(view) {
+  if (view !== "chat" && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
   ["welcome", "chat", "games", "callRooms"].forEach(id => $("#" + id).classList.toggle("hidden", id !== (view === "rooms" ? "callRooms" : view)));
   document.body.dataset.view = view;
   const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
@@ -367,6 +368,7 @@ function renderRequests(incoming, outgoing) {
   });
 }
 async function openPeer(friend) {
+  if (peer && peer.id !== friend.id && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
   peer = friend;
   $("#contextEyebrow").textContent = "YOUR CONVERSATION";
   $("#contextTitle").textContent = "A little hello to " + friend.name + ".";
@@ -455,6 +457,7 @@ function voiceMimeType() {
 }
 async function beginVoiceMessage(event) {
   if (voiceRecorder || !peer) return;
+  const recordingPeer = peer;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     toast("Microphone access isn't available. Open Pinglet over HTTPS in a supported browser.");
     return;
@@ -463,7 +466,7 @@ async function beginVoiceMessage(event) {
     voiceAbort = false;
     voicePointerId = event && event.pointerId !== undefined ? event.pointerId : null;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
-    if (!voicePointerHeld || !peer || $("#chat").classList.contains("hidden")) {
+    if (!voicePointerHeld || !peer || peer.id !== recordingPeer.id || $("#chat").classList.contains("hidden")) {
       stream.getTracks().forEach(track => track.stop());
       return;
     }
@@ -487,8 +490,8 @@ async function beginVoiceMessage(event) {
       if (voiceAbort) { toast("Voice recording cancelled."); return; }
       if (blob.size < 500) { toast("That voice message was too short. Try again."); return; }
       if (blob.size > voiceMaxBytes) { toast("That clip is too large. Keep voice messages to 8 seconds or less."); return; }
-      const activePeer = peer;
-      if (!activePeer) return;
+      const activePeer = recordingPeer;
+      if (!peer || peer.id !== activePeer.id) { toast("Voice clip discarded because you switched chats."); return; }
       button.disabled = true;
       try {
         const bytes = await blob.arrayBuffer();
