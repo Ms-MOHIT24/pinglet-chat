@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10131c">
+  <title>Delete your account — Pinglet</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="policy-page">
+<main class="policy-shell">
+  <a class="policy-back" href="/">← Back to Pinglet</a>
+  <p class="eyebrow">PINGLET · ACCOUNT CONTROL</p>
+  <h1>Delete your account</h1>
+  <p>Use this page if you have uninstalled Pinglet or cannot open the in-app deletion option. Sign in with your 14-character friend code and password, then confirm deletion.</p>
+  <div class="policy-note">
+    Deletion permanently removes your account, friend connections, pending requests, and stored messages. This cannot be undone. Safety reports may be retained or de-identified when required for abuse prevention or legal obligations. A private key saved on a different device or browser cannot be remotely erased by this page.
+  </div>
+  <form id="deleteWebForm" class="delete-web-form">
+    <label>Friend code<input id="deleteWebCode" maxlength="14" minlength="14" autocomplete="username" autocapitalize="characters" spellcheck="false" required placeholder="14-character code"></label>
+    <label>Password<input id="deleteWebPassword" type="password" maxlength="128" autocomplete="current-password" required></label>
+    <label class="terms-consent"><input id="deleteWebConfirm" type="checkbox" required><span>I understand this permanently deletes my Pinglet account and stored account data.</span></label>
+    <button class="danger wide" id="deleteWebButton" type="submit">Permanently delete account</button>
+    <p id="deleteWebStatus" class="error" role="status" aria-live="polite"></p>
+  </form>
+  <p><a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Use</a> · <a href="/child-safety.html">Child Safety Standards</a></p>
+  <a class="policy-back" href="/">← Back to Pinglet</a>
+</main>
+<script src="/delete-account.js" defer></script>
+</body>
+</html>
