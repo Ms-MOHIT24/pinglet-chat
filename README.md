@@ -4,6 +4,7 @@ Pinglet is a browser-first social chat prototype with unique friend codes, QR in
 
 ## Current features
 
+- **Free-host wake-up handling:** read-only API requests retry temporary 502/503/504 and network failures while the free service is starting. Render may still show its own cold-start screen for about a minute after idle periods.
 - **Animated web and Android experience:** shared motion design for screen transitions, buttons, navigation, friend lists, chat bubbles, cards, calls and ambient backgrounds. Motion respects the device's reduced-motion setting. The Android Capacitor shell uses the hosted web app, so the same interface is shown on both platforms.
 
 - **Rock, Paper, Scissors:** animated countdown and reveal, win/loss/tie feedback, local score tracking, and a direct entry from the home screen, Games tab, or `/games`.
