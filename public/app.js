@@ -503,7 +503,15 @@ async function loadMessages() {
         reportButton.className = "report-message-button";
         reportButton.textContent = "Report message";
         reportButton.setAttribute("aria-label", "Report this message");
-        reportButton.addEventListener("click", () => openReportModal(clear.startsWith("Unable to decrypt") ? "" : "Message from " + activePeer.name + ": " + clear));
+        reportButton.addEventListener("click", () => {
+          const sentAt = new Date(message.created).toLocaleString();
+          const evidence = clear.startsWith("PINGLET_VOICE_V1|")
+            ? "Voice message from " + activePeer.name + " at " + sentAt + "."
+            : clear.startsWith("Unable to decrypt")
+              ? ""
+              : ("Message from " + activePeer.name + ": " + clear.slice(0, 2500));
+          openReportModal(evidence);
+        });
         bubble.appendChild(reportButton);
       }
       return bubble;
