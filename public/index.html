@@ -15,7 +15,7 @@
   <div class="tabs"><button class="tab active" data-tab="create">Create account</button><button class="tab" data-tab="login">Sign in</button></div>
   <form id="authForm">
     <label id="nameWrap">Your name<input id="name" maxlength="24" placeholder="What should friends call you?" required></label>
-    <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" placeholder="Your 14-character code"></label>
+    <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="14" placeholder="Your 14-character code"></label>
     <label>Password<input id="password" type="password" minlength="8" maxlength="128" placeholder="At least 8 characters" required></label>
     <button class="primary wide" id="authSubmit">Create my space →</button>
   </form>
