@@ -1,7 +1,9 @@
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
-let snakePeerId = null, snakeState = null;
+let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
+let rpsWins = Number(localStorage.getItem("pinglet_rps_wins") || 0);
+let rpsRounds = Number(localStorage.getItem("pinglet_rps_rounds") || 0);
 const encoder = new TextEncoder(), decoder = new TextDecoder();
 const chatKeyCache = new Map();
 const inviteMatch = location.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
@@ -120,6 +122,10 @@ function setConnectionStatus(label, connected) {
 function show(view) {
   ["welcome", "chat", "games"].forEach(id => $("#" + id).classList.toggle("hidden", id !== view));
   document.body.dataset.view = view;
+  const activeNav = view === "games" ? "gamesNav" : "homeNav";
+  ["homeNav", "gamesNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
+  $("#requests").classList.remove("mobile-open");
+  $("#requestsNav").setAttribute("aria-expanded", "false");
   if (view === "games") drawSnake();
 }
 function setAuthTab(next) {
@@ -255,17 +261,23 @@ function renderFriends() {
   list.replaceChildren();
   if (!friends.length) {
     list.innerHTML = '<p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p>';
+    updateWelcomeStats();
     return;
   }
-  const visibleFriends = friends.filter(friend =>
-    friend.name.toLowerCase().includes(query) || friend.code.toLowerCase().includes(query) ||
-    (friend.label || "").toLowerCase().includes(query)
-  );
+  const visibleFriends = friends.filter(friend => {
+    const matchesQuery = friend.name.toLowerCase().includes(query) ||
+      friend.code.toLowerCase().includes(query) || (friend.label || "").toLowerCase().includes(query);
+    const isSpecial = !!friend.label && friend.label !== "Friend";
+    return matchesQuery && (activeFriendFilter === "all" || isSpecial);
+  });
   if (!visibleFriends.length) {
     const empty = document.createElement("p");
     empty.className = "empty search-empty";
-    empty.textContent = "No friends match “" + query + "”.";
+    empty.textContent = activeFriendFilter === "special"
+      ? "No close-circle labels yet. Give someone a special label ✨"
+      : "No friends match “" + query + "”.";
     list.appendChild(empty);
+    updateWelcomeStats();
     return;
   }
   visibleFriends.forEach(friend => {
@@ -280,12 +292,19 @@ function renderFriends() {
     button.addEventListener("click", () => openPeer(friend));
     list.appendChild(button);
   });
+  updateWelcomeStats();
+}
+function updateWelcomeStats() {
+  $("#circleStat").textContent = String(friends.length);
+  $("#requestsStat").textContent = $("#requestCount").textContent || "0";
 }
 function renderRequests(incoming, outgoing) {
   const list = $("#requests");
   list.innerHTML = "";
   $("#requestCount").textContent = String(incoming.length);
-  $("#requestsNav").textContent = "📨 Requests" + (incoming.length ? " · " + incoming.length : "");
+  $("#requestsNavCount").textContent = String(incoming.length);
+  $("#requestsNavCount").classList.toggle("hidden", incoming.length === 0);
+  updateWelcomeStats();
   if (!incoming.length && !outgoing.length) {
     list.innerHTML = '<p class="empty">No new requests.</p>';
     return;
@@ -470,29 +489,97 @@ $("#modalForm").addEventListener("submit", async event => {
   } catch (error) { $("#modalError").textContent = error.message; }
 });
 $("#friendSearch").addEventListener("input", renderFriends);
+document.querySelectorAll("[data-friend-filter]").forEach(button => button.addEventListener("click", () => {
+  activeFriendFilter = button.dataset.friendFilter;
+  document.querySelectorAll("[data-friend-filter]").forEach(item => {
+    const selected = item === button;
+    item.classList.toggle("active", selected);
+    item.setAttribute("aria-pressed", String(selected));
+  });
+  renderFriends();
+}));
 $("#topAddFriend").addEventListener("click", showAddFriendModal);
 $("#welcomeShare").addEventListener("click", showQrModal);
+$("#homeNav").addEventListener("click", () => {
+  show(peer ? "chat" : "welcome");
+  $("#contextEyebrow").textContent = peer ? "YOUR CONVERSATION" : "YOUR PRIVATE SPACE";
+  $("#contextTitle").textContent = peer ? "A little hello to " + peer.name + "." : "A little more connected.";
+});
 $("#requestsNav").addEventListener("click", () => {
   const requests = $("#requests");
   const opened = requests.classList.toggle("mobile-open");
   $("#requestsNav").setAttribute("aria-expanded", String(opened));
+  $("#requestsNav").classList.toggle("active", opened);
 });
 $("#gamesNav").addEventListener("click", () => {
-  $("#requests").classList.remove("mobile-open");
-  show("games"); $("#contextEyebrow").textContent = "A LITTLE BREAK"; $("#contextTitle").textContent = "Play something.";
+  show("games");
+  $("#contextEyebrow").textContent = "A LITTLE BREAK";
+  $("#contextTitle").textContent = "Play something.";
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
+$("#peerCopyCode").addEventListener("click", async () => {
+  if (!peer) return;
+  try { await copyText(peer.code); toast("Friend code copied."); }
+  catch { toast("Friend code: " + peer.code); }
+});
+document.querySelectorAll("[data-quick-message]").forEach(button => button.addEventListener("click", () => {
+  const input = $("#messageInput");
+  const phrase = button.dataset.quickMessage;
+  input.value = input.value.trim() ? input.value.trimEnd() + " " + phrase : phrase;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.focus();
+}));
+$("#messageInput").addEventListener("input", () => {
+  $("#messageCounter").textContent = $("#messageInput").value.length + " / 2000";
+});
+const conversationSparks = [
+  "What's one tiny thing that made you smile today?",
+  "Which song has been stuck in your head lately?",
+  "What's a random memory that still makes you laugh?",
+  "What would your perfect no-plans day look like?",
+  "What's something new you'd love to try together?",
+  "What is one small win from this week?"
+];
+$("#sparkNext").addEventListener("click", () => {
+  sparkIndex = (sparkIndex + 1 + Math.floor(Math.random() * (conversationSparks.length - 1))) % conversationSparks.length;
+  $("#sparkPrompt").textContent = conversationSparks[sparkIndex];
+  $("#sparkNext").classList.remove("spark-spin");
+  void $("#sparkNext").offsetWidth;
+  $("#sparkNext").classList.add("spark-spin");
+});
 
 $("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
 
-/* Rock, Paper, Scissors */
+/* Rock, Paper, Scissors — real local score, saved on this device. */
+function renderRpsScore() {
+  $("#rpsWins").textContent = String(rpsWins);
+  $("#rpsRounds").textContent = String(rpsRounds);
+  $("#rpsWinRate").textContent = (rpsRounds ? Math.round((rpsWins / rpsRounds) * 100) : 0) + "%";
+}
+renderRpsScore();
 document.querySelectorAll("[data-choice]").forEach(button => button.addEventListener("click", () => {
   const mine = button.dataset.choice;
   const other = ["rock", "paper", "scissors"][Math.floor(Math.random() * 3)];
-  const result = mine === other ? "It's a tie!" : ({ rock: "scissors", paper: "rock", scissors: "paper" }[mine] === other ? "You win! 🎉" : "The computer wins!");
-  $("#gameResult").textContent = "You: " + mine + " · Opponent: " + other + " — " + result;
+  const won = ({ rock: "scissors", paper: "rock", scissors: "paper" }[mine] === other);
+  const tied = mine === other;
+  rpsRounds += 1;
+  if (won) rpsWins += 1;
+  localStorage.setItem("pinglet_rps_wins", String(rpsWins));
+  localStorage.setItem("pinglet_rps_rounds", String(rpsRounds));
+  renderRpsScore();
+  document.querySelectorAll("[data-choice]").forEach(item => item.classList.toggle("picked", item === button));
+  const names = { rock: "Rock", paper: "Paper", scissors: "Scissors" };
+  const result = tied ? "It's a tie!" : won ? "You win this round! ✨" : "The computer wins this round.";
+  $("#gameResult").textContent = "You picked " + names[mine] + " · Pinglet picked " + names[other] + " — " + result;
 }));
-$("#resetGame").addEventListener("click", () => $("#gameResult").textContent = "Choose your move.");
+$("#resetGame").addEventListener("click", () => {
+  rpsWins = 0; rpsRounds = 0;
+  localStorage.setItem("pinglet_rps_wins", "0");
+  localStorage.setItem("pinglet_rps_rounds", "0");
+  renderRpsScore();
+  document.querySelectorAll("[data-choice]").forEach(item => item.classList.remove("picked"));
+  $("#gameResult").textContent = "Score cleared. Ready for another round?";
+});
 
 /* Online two-player Snake Duel */
 function updateSnakeUI() {
