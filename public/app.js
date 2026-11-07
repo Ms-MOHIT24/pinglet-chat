@@ -114,6 +114,17 @@ async function readPrivateKey(userId) {
     tx.onabort = () => { db.close(); reject(tx.error || new Error("Could not read the encryption key.")); };
   });
 }
+async function deletePrivateKey(userId) {
+  if (!userId) return;
+  const db = await openKeyDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("keys", "readwrite");
+    tx.objectStore("keys").delete(userId);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("Could not remove the local encryption key.")); };
+  });
+}
 async function deriveChatKey(friend) {
   if (chatKeyCache.has(friend.id)) return chatKeyCache.get(friend.id);
   const publicKey = await crypto.subtle.importKey("jwk", friend.pubkey, { name: "ECDH", namedCurve: "P-256" }, false, []);
@@ -185,6 +196,9 @@ function setAuthTab(next) {
   $("#code").required = next === "login";
   $("#authSubmit").textContent = next === "login" ? "Sign in →" : "Create my space →";
   $("#authHint").textContent = next === "login" ? "Use your friend code and password." : "Your unique friend code is created automatically.";
+  $("#termsConsentWrap").classList.toggle("hidden", next === "login");
+  $("#termsAccepted").required = next !== "login";
+  $("#password").autocomplete = next === "login" ? "current-password" : "new-password";
 }
 document.querySelectorAll(".tab").forEach(button => button.addEventListener("click", () => setAuthTab(button.dataset.tab)));
 
@@ -196,7 +210,7 @@ $("#authForm").addEventListener("submit", async (event) => {
     if (mode === "create") {
       const pair = await generateKeys();
       const pubkey = await exportPublicKey(pair.publicKey);
-      const data = await api("/register", { method: "POST", body: JSON.stringify({ name: $("#name").value, password: $("#password").value, pubkey }) });
+      const data = await api("/register", { method: "POST", body: JSON.stringify({ name: $("#name").value, password: $("#password").value, pubkey, termsAccepted: $("#termsAccepted").checked }) });
       await savePrivateKey(pair.privateKey, data.user.id);
       privateKey = pair.privateKey;
       await finishLogin(data);
@@ -221,6 +235,7 @@ async function boot() {
   try {
     const data = await api("/me");
     me = data.user;
+    if (!me.termsAccepted) $("#termsModal").classList.remove("hidden");
     privateKey = privateKey || await readPrivateKey(me.id);
     if (!privateKey) throw new Error("Encryption key missing on this browser. Sign in on the browser where you created the account.");
     $("#auth").classList.add("hidden");
@@ -235,6 +250,12 @@ async function boot() {
     });
     socket.on("friend-request", async () => { await loadRequests(); toast("You have a new friend request."); });
     socket.on("friendship", async () => { await loadFriends(); await loadRequests(); toast("A new friend was added to your circle."); });
+    socket.on("blocked", async payload => {
+      await loadFriends();
+      await loadRequests();
+      if (peer && payload && payload.by === peer.id) { peer = null; show("welcome"); }
+      toast("A connection was blocked and removed from your circle.");
+    });
     socket.on("connect_error", () => {
       $("#contextEyebrow").textContent = "RECONNECTING";
       setConnectionStatus("Reconnecting", false);
@@ -473,6 +494,15 @@ async function loadMessages() {
       const time = document.createElement("time");
       time.textContent = new Date(message.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       bubble.appendChild(time);
+      if (message.sender !== me.id) {
+        const reportButton = document.createElement("button");
+        reportButton.type = "button";
+        reportButton.className = "report-message-button";
+        reportButton.textContent = "Report message";
+        reportButton.setAttribute("aria-label", "Report this message");
+        reportButton.addEventListener("click", () => openReportModal(clear.startsWith("Unable to decrypt") ? "" : "Message from " + activePeer.name + ": " + clear));
+        bubble.appendChild(reportButton);
+      }
       return bubble;
     }));
     // A slower response for the previous chat must not overwrite the newly opened chat.
@@ -975,6 +1005,104 @@ $("#roomsNav").addEventListener("click", event => {
   $("#contextTitle").textContent = "Voice and video rooms.";
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
+function openReportModal(evidence = "") {
+  if (!peer) return;
+  $("#reportModal").classList.remove("hidden");
+  $("#reportTitle").textContent = "Report " + peer.name;
+  $("#reportCategory").value = "";
+  $("#reportDetails").value = evidence;
+  $("#reportError").textContent = "";
+}
+$("#reportPeer").addEventListener("click", () => openReportModal());
+$("#blockPeer").addEventListener("click", async () => {
+  if (!peer) return;
+  const target = peer;
+  const confirmed = window.confirm("Block " + target.name + "? They will be removed from your circle and cannot message you or join your call rooms.");
+  if (!confirmed) return;
+  try {
+    await api("/users/" + target.id + "/block", { method: "POST", body: "{}" });
+    messageDrafts.delete(target.id);
+    peer = null;
+    $("#messageInput").value = "";
+    $("#messageInput").dispatchEvent(new Event("input", { bubbles: true }));
+    show("welcome");
+    await loadFriends();
+    await loadRequests();
+    toast(target.name + " has been blocked.");
+  } catch (error) { toast(error.message); }
+});
+$("#reportClose").addEventListener("click", () => $("#reportModal").classList.add("hidden"));
+$("#reportModal").addEventListener("click", event => { if (event.target.id === "reportModal") $("#reportModal").classList.add("hidden"); });
+$("#reportForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!peer) return;
+  const activePeer = peer;
+  const button = $("#submitReport");
+  button.disabled = true;
+  $("#reportError").textContent = "";
+  try {
+    await api("/reports", { method: "POST", body: JSON.stringify({ reportedUserId: activePeer.id, category: $("#reportCategory").value, details: $("#reportDetails").value }) });
+    $("#reportModal").classList.add("hidden");
+    toast("Report submitted. Thank you for helping keep Pinglet safe.");
+  } catch (error) { $("#reportError").textContent = error.message; }
+  finally { button.disabled = false; }
+});
+async function openSafetySettings() {
+  $("#safetyModal").classList.remove("hidden");
+  $("#requests").classList.remove("mobile-open");
+  const list = $("#blockedList");
+  list.replaceChildren();
+  const loading = document.createElement("p"); loading.className = "muted"; loading.textContent = "Loading blocked accounts…"; list.appendChild(loading);
+  try {
+    const data = await api("/blocks");
+    list.replaceChildren();
+    if (!data.blocked || !data.blocked.length) {
+      const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "You have not blocked anyone."; list.appendChild(empty); return;
+    }
+    for (const person of data.blocked) {
+      const row = document.createElement("div"); row.className = "blocked-row";
+      const name = document.createElement("span"); name.textContent = person.name;
+      const button = document.createElement("button"); button.type = "button"; button.className = "ghost small"; button.textContent = "Unblock";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try { await api("/users/" + person.id + "/block", { method: "DELETE" }); row.remove(); toast(person.name + " was unblocked."); }
+        catch (error) { button.disabled = false; toast(error.message); }
+      });
+      row.append(name, button); list.appendChild(row);
+    }
+  } catch (error) { list.textContent = error.message; }
+}
+$("#safetyNav").addEventListener("click", openSafetySettings);
+$("#safetyClose").addEventListener("click", () => $("#safetyModal").classList.add("hidden"));
+$("#safetyModal").addEventListener("click", event => { if (event.target.id === "safetyModal") $("#safetyModal").classList.add("hidden"); });
+$("#deleteAccountForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if ($("#deleteConfirmText").value.trim() !== "DELETE") { $("#deleteAccountError").textContent = "Type DELETE exactly to confirm."; return; }
+  if (!window.confirm("Permanently delete your Pinglet account and stored account data? This cannot be undone.")) return;
+  const button = $("#deleteAccountButton"); button.disabled = true; $("#deleteAccountError").textContent = "";
+  try {
+    await api("/me", { method: "DELETE", body: JSON.stringify({ password: $("#deletePassword").value }) });
+    await deletePrivateKey(me.id);
+    localStorage.removeItem("pinglet_token");
+    messageDrafts.clear();
+    if (socket) socket.disconnect();
+    toast("Your account has been deleted.");
+    setTimeout(() => location.reload(), 450);
+  } catch (error) { $("#deleteAccountError").textContent = error.message; button.disabled = false; }
+});
+$("#termsForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!$("#termsExistingAccepted").checked) return;
+  const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true;
+  try {
+    await api("/me/terms", { method: "POST", body: JSON.stringify({ accepted: true }) });
+    me.termsAccepted = true;
+    $("#termsModal").classList.add("hidden");
+    if (socket && !socket.connected) socket.connect();
+    toast("Thanks. You're all set.");
+  } catch (error) { toast(error.message); }
+  finally { button.disabled = false; }
+});
 $("#peerCopyCode").addEventListener("click", async () => {
   if (!peer) return;
   try { await copyText(peer.code); toast("Friend code copied."); }
@@ -1016,6 +1144,7 @@ $("#sparkNext").addEventListener("click", () => {
 $("#logout").addEventListener("click", () => {
   messageDrafts.clear();
   localStorage.removeItem("pinglet_token");
+  if (socket) socket.disconnect();
   location.reload();
 });
 
