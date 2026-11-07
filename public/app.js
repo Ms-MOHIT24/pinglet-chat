@@ -1,6 +1,8 @@
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
+let messageSending = false;
+const messageDrafts = new Map();
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
 let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
@@ -142,6 +144,15 @@ function toast(message) {
   }
   node.textContent = message; node.classList.add("show");
   clearTimeout(toast.timer); toast.timer = setTimeout(() => node.classList.remove("show"), 3200);
+}
+function updateComposerState() {
+  const input = $("#messageInput");
+  const button = $("#sendForm")?.querySelector("button[type='submit']");
+  if (!input || !button) return;
+  const canSend = Boolean(peer && input.value.trim() && !messageSending);
+  button.disabled = !canSend;
+  button.setAttribute("aria-label", messageSending ? "Sending message" : "Send message");
+  button.title = messageSending ? "Sending message…" : canSend ? "Send message" : "Write a message to enable sending";
 }
 function setConnectionStatus(label, connected) {
   const node = $("#connectionStatus");
@@ -310,9 +321,14 @@ async function loadFriends() {
       peer = updated;
       $("#peerTag").textContent = updated.label || "Friend";
     } else {
-      peer = null; show("welcome");
+      messageDrafts.delete(peer.id);
+      peer = null;
+      const input = $("#messageInput");
+      if (input) { input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true })); }
+      show("welcome");
     }
   }
+  updateComposerState();
   updateSnakeUI();
 }
 async function loadRequests() {
@@ -403,8 +419,19 @@ function renderRequests(incoming, outgoing) {
   });
 }
 async function openPeer(friend) {
+  const previousPeerId = peer?.id;
+  const input = $("#messageInput");
+  if (previousPeerId && previousPeerId !== friend.id && input) {
+    const previousDraft = input.value;
+    if (previousDraft.trim()) messageDrafts.set(previousPeerId, previousDraft);
+    else messageDrafts.delete(previousPeerId);
+  }
   if (peer && peer.id !== friend.id && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
   peer = friend;
+  if (input) {
+    input.value = messageDrafts.get(friend.id) || "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
   $("#contextEyebrow").textContent = "YOUR CONVERSATION";
   $("#contextTitle").textContent = "A little hello to " + friend.name + ".";
   $("#peerName").textContent = friend.name;
@@ -470,17 +497,25 @@ $("#sendForm").addEventListener("submit", async event => {
   const messageText = $("#messageInput").value.trim();
   const activePeer = peer;
   if (!messageText || !activePeer) return;
-  const sendButton = $("#sendForm").querySelector("button[type='submit']");
-  sendButton.disabled = true;
+  if (messageSending) return;
+  messageSending = true;
+  updateComposerState();
   try {
     const encrypted = await encryptMessage(messageText, activePeer);
     await api("/messages", { method: "POST", body: JSON.stringify({ recipient: activePeer.id, ...encrypted }) });
     if (peer && peer.id === activePeer.id) {
-      if ($("#messageInput").value.trim() === messageText) $("#messageInput").value = "";
+      if ($("#messageInput").value.trim() === messageText) {
+        $("#messageInput").value = "";
+        messageDrafts.delete(activePeer.id);
+        $("#messageInput").dispatchEvent(new Event("input", { bubbles: true }));
+      }
       await loadMessages();
     }
   } catch (error) { toast(error.message); }
-  finally { sendButton.disabled = false; }
+  finally {
+    messageSending = false;
+    updateComposerState();
+  }
 });
 /* Walkie-talkie voice messages are encrypted before storage and limited to short clips. */
 const voiceMaxDurationMs = 8000;
@@ -953,8 +988,15 @@ document.querySelectorAll("[data-quick-message]").forEach(button => button.addEv
   input.focus();
 }));
 $("#messageInput").addEventListener("input", () => {
-  $("#messageCounter").textContent = $("#messageInput").value.length + " / 2000";
+  const input = $("#messageInput");
+  $("#messageCounter").textContent = input.value.length + " / 2000";
+  if (peer) {
+    if (input.value.trim()) messageDrafts.set(peer.id, input.value);
+    else messageDrafts.delete(peer.id);
+  }
+  updateComposerState();
 });
+updateComposerState();
 const conversationSparks = [
   "What's one tiny thing that made you smile today?",
   "Which song has been stuck in your head lately?",
@@ -971,7 +1013,11 @@ $("#sparkNext").addEventListener("click", () => {
   $("#sparkNext").classList.add("spark-spin");
 });
 
-$("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
+$("#logout").addEventListener("click", () => {
+  messageDrafts.clear();
+  localStorage.removeItem("pinglet_token");
+  location.reload();
+});
 
 /* Rock, Paper, Scissors — animated reveal with a local saved scoreboard. */
 let rpsBusy = false;
