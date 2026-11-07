@@ -154,32 +154,7 @@ async function main() {
     assert.ok(moderation.data.reports.some(item => item.id === report.data.reportId));
     pass("Report submission and protected moderation queue work");
 
-    const blocked = await request("/api/users/" + bobId + "/block", {
-      method: "POST", token: aliceToken, body: {}
-    });
-    assert.equal(blocked.status, 200);
-    const callLeftNotice = await callLeft;
-    assert.equal(callLeftNotice.peerId, aliceSocket.id);
-    const snakeEndedNotice = await snakeEnded;
-    assert.match(snakeEndedNotice.message, /blocked the other/i);
-    pass("Blocking immediately ends active call and Snake Duel sessions");
-    const blockedList = await request("/api/blocks", { token: aliceToken });
-    assert.ok(blockedList.data.blocked.some(item => item.id === bobId));
-    const messageAfterBlock = await request("/api/messages", {
-      method: "POST",
-      token: bobToken,
-      body: {
-        recipient: aliceId,
-        ciphertext: Buffer.from("blocked-payload").toString("base64"),
-        iv: Buffer.alloc(12, 8).toString("base64")
-      }
-    });
-    assert.equal(messageAfterBlock.status, 403);
-    pass("Blocking removes friendship and prevents message sending");
 
-    const unblocked = await request("/api/users/" + bobId + "/block", { method: "DELETE", token: aliceToken });
-    assert.equal(unblocked.status, 200);
-    pass("Unblock endpoint works");
 
     const aliceSocket = await connectSocket(aliceToken);
     const bobSocket = await connectSocket(bobToken);
@@ -225,6 +200,32 @@ async function main() {
 
     const callLeft = nextSocketEvent(bobSocket, "call:participant-left");
     const snakeEnded = nextSocketEvent(bobSocket, "snake:error");
+    const blocked = await request("/api/users/" + bobId + "/block", {
+      method: "POST", token: aliceToken, body: {}
+    });
+    assert.equal(blocked.status, 200);
+    const callLeftNotice = await callLeft;
+    assert.equal(callLeftNotice.peerId, aliceSocket.id);
+    const snakeEndedNotice = await snakeEnded;
+    assert.match(snakeEndedNotice.message, /blocked the other/i);
+    pass("Blocking immediately ends active call and Snake Duel sessions");
+    const blockedList = await request("/api/blocks", { token: aliceToken });
+    assert.ok(blockedList.data.blocked.some(item => item.id === bobId));
+    const messageAfterBlock = await request("/api/messages", {
+      method: "POST",
+      token: bobToken,
+      body: {
+        recipient: aliceId,
+        ciphertext: Buffer.from("blocked-payload").toString("base64"),
+        iv: Buffer.alloc(12, 8).toString("base64")
+      }
+    });
+    assert.equal(messageAfterBlock.status, 403);
+    pass("Blocking removes friendship and prevents message sending");
+
+    const unblocked = await request("/api/users/" + bobId + "/block", { method: "DELETE", token: aliceToken });
+    assert.equal(unblocked.status, 200);
+    pass("Unblock endpoint works");
     const wrongDelete = await request("/api/me", {
       method: "DELETE", token: bobToken, body: { password: "incorrect-password" }
     });
