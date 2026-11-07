@@ -97,9 +97,30 @@
    <div class="composer-meta"><p class="composer-note">Messages use experimental encryption. Friend identity keys are not verified.</p><span id="messageCounter">0 / 2000</span></div>
   </section>
   <section id="games" class="games hidden">
-   <div class="game-card"><div class="game-icon">✊</div><p class="eyebrow">QUICK PLAY</p><h2>Rock, paper, scissors</h2><p class="muted">A tiny game while you catch up.</p>
+   <div class="game-card rps-card">
+    <div class="rps-heading"><div><p class="eyebrow">THE QUICK-DRAW ARENA</p><h2>Rock, paper, scissors</h2><p class="muted">Pick your move. Watch the reveal. Claim the bragging rights.</p></div><span class="rps-live"><i></i> 1 PLAYER</span></div>
     <div class="rps-scoreboard"><div><b id="rpsWins">0</b><small>WINS</small></div><div><b id="rpsRounds">0</b><small>ROUNDS</small></div><div><b id="rpsWinRate">0%</b><small>WIN RATE</small></div></div>
-    <div class="choices"><button data-choice="rock" aria-label="Choose rock"><span>✊</span><small>Rock</small></button><button data-choice="paper" aria-label="Choose paper"><span>✋</span><small>Paper</small></button><button data-choice="scissors" aria-label="Choose scissors"><span>✌️</span><small>Scissors</small></button></div><h3 id="gameResult" aria-live="polite">Choose your move.</h3><button id="resetGame" class="ghost">Reset score</button>
+    <div class="rps-arena" id="rpsArena" data-state="idle" aria-label="Rock paper scissors match stage">
+     <div class="rps-arena-glow"></div>
+     <div class="rps-side">
+      <span class="rps-side-label">YOU</span>
+      <div class="rps-avatar player-avatar">✦</div>
+      <div class="rps-hand" id="rpsPlayerHand">✊</div>
+      <strong id="rpsPlayerPick">Ready?</strong>
+     </div>
+     <div class="arena-middle"><span class="arena-vs">VS</span><span id="rpsCountdown" class="rps-countdown">READY?</span></div>
+     <div class="rps-side opponent">
+      <span class="rps-side-label">PINGLET BOT</span>
+      <div class="rps-avatar bot-avatar">✳</div>
+      <div class="rps-hand" id="rpsOpponentHand">✊</div>
+      <strong id="rpsOpponentPick">Waiting…</strong>
+     </div>
+     <div id="rpsCelebration" class="rps-celebration" aria-hidden="true"></div>
+    </div>
+    <p class="rps-move-label">MAKE YOUR MOVE</p>
+    <div class="choices"><button data-choice="rock" aria-label="Choose rock"><span>✊</span><small>ROCK</small></button><button data-choice="paper" aria-label="Choose paper"><span>✋</span><small>PAPER</small></button><button data-choice="scissors" aria-label="Choose scissors"><span>✌️</span><small>SCISSORS</small></button></div>
+    <h3 id="gameResult" class="rps-result" aria-live="polite">Choose your move to start the match.</h3>
+    <div class="rps-footer"><span>Best of luck ✨</span><button id="resetGame" class="ghost">Reset score ↻</button></div>
    </div>
    <div class="game-card snake-card">
     <div class="game-icon">🐍</div><p class="eyebrow">1 VS 1 ONLINE</p><h2>Snake Duel</h2><p class="muted" id="snakeHelp">Open a saved friend's chat, then invite them here. Both players control their own snake.</p>
