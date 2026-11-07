@@ -1,6 +1,7 @@
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
+let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
 let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
 let qrDetector = null, qrTrack = null, qrTorchOn = false, pendingScannedCode = null;
@@ -124,8 +125,8 @@ function setConnectionStatus(label, connected) {
 function show(view) {
   ["welcome", "chat", "games"].forEach(id => $("#" + id).classList.toggle("hidden", id !== view));
   document.body.dataset.view = view;
-  const activeNav = view === "games" ? "gamesNav" : "homeNav";
-  ["homeNav", "gamesNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
+  const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
+  ["homeNav", "gamesNav", "roomsNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
   $("#requests").classList.remove("mobile-open");
   $("#requestsNav").setAttribute("aria-expanded", "false");
   const panel = $("#" + view);
@@ -202,7 +203,10 @@ async function boot() {
       if (peer) $("#contextEyebrow").textContent = "YOUR CONVERSATION";
       setConnectionStatus("Connected", true);
     });
-    socket.on("disconnect", () => setConnectionStatus("Offline", false));
+    socket.on("disconnect", () => {
+      setConnectionStatus("Offline", false);
+      if (callCode) { resetCallUi(); toast("Your call disconnected. Rejoin with the room code."); }
+    });
     socket.on("snake:invite", payload => {
       if (payload.fromId === me.id) return;
       pendingSnakeInvite = payload.fromId;
@@ -211,6 +215,21 @@ async function boot() {
     });
     socket.on("snake:state", state => { snakeState = state; updateSnakeUI(); });
     socket.on("snake:error", err => toast(err.message || "Snake Duel error."));
+
+    socket.on("call:participant-joined", person => {
+      if (!callCode || !person || !person.peerId) return;
+      createCallPeer(person.peerId, person.name || "A Pinglet friend", false).catch(error => {
+        console.warn("Could not prepare call connection:", error);
+        setCallStatus("Couldn't connect to " + (person.name || "a participant") + ".");
+      });
+      setCallStatus((person.name || "Someone") + " joined · " + (1 + callPeers.size) + "/4 here");
+    });
+    socket.on("call:participant-left", person => removeCallPeer(person && person.peerId));
+    socket.on("call:signal", payload => handleCallSignal(payload).catch(error => {
+      console.warn("Call signaling error:", error);
+      setCallStatus("A connection hiccup happened. Try rejoining the room.");
+    }));
+    socket.on("call:reaction", payload => showCallReaction(payload));
     await loadFriends();
     await loadRequests();
     await processPendingInvite();
@@ -734,10 +753,18 @@ $("#requestsNav").addEventListener("click", () => {
   $("#requestsNav").setAttribute("aria-expanded", String(opened));
   $("#requestsNav").classList.toggle("active", opened);
 });
-$("#gamesNav").addEventListener("click", () => {
+
+function openGames(viewTitle = "Play something.") {
   show("games");
   $("#contextEyebrow").textContent = "A LITTLE BREAK";
-  $("#contextTitle").textContent = "Play something.";
+  $("#contextTitle").textContent = viewTitle;
+}
+$("#gamesNav").addEventListener("click", () => openGames());
+$("#welcomeRps").addEventListener("click", () => openGames("Rock, paper, scissors"));
+$("#roomsNav").addEventListener("click", () => {
+  show("rooms");
+  $("#contextEyebrow").textContent = "YOUR PRIVATE HANGOUT";
+  $("#contextTitle").textContent = "Voice and video rooms.";
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
 $("#peerCopyCode").addEventListener("click", async () => {
@@ -956,6 +983,248 @@ document.addEventListener("keydown", event => {
   const direction = directions[event.key] || directions[event.key.toLowerCase()];
   if (direction) { event.preventDefault(); sendSnakeDirection(direction); }
 });
+/* Voice and video rooms: WebRTC media is peer-to-peer; Socket.IO only signals room members. */
+function setCallStatus(message) {
+  const node = $("#callStatus");
+  if (node) node.textContent = message;
+}
+function callRoomAck(eventName, payload) {
+  return new Promise((resolve, reject) => {
+    if (!socket || !socket.connected) return reject(new Error("Reconnect to Pinglet before joining a call."));
+    const timer = setTimeout(() => reject(new Error("The room server didn't respond. Try again.")), 10000);
+    socket.emit(eventName, payload, response => {
+      clearTimeout(timer);
+      resolve(response || { ok: false, error: "The room request could not be completed." });
+    });
+  });
+}
+async function requestCallMedia(mode) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error("This browser cannot access a microphone or camera. Open Pinglet over HTTPS in a supported browser.");
+  }
+  return navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    video: mode === "video" ? { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } : false
+  });
+}
+async function openCallRoom(action, value) {
+  if (callBusy || callCode) return;
+  if (!socket || !socket.connected) { toast("Connect to Pinglet before starting a call."); return; }
+  callBusy = true;
+  const buttons = [$("#createVideoRoom"), $("#createVoiceRoom"), $("#joinCallRoom")];
+  buttons.forEach(button => { button.disabled = true; });
+  let response;
+  try {
+    if (action === "create") {
+      callStream = await requestCallMedia(value);
+      response = await callRoomAck("call:create", { mode: value });
+    } else {
+      response = await callRoomAck("call:join", { code: value });
+      if (response.ok) callStream = await requestCallMedia(response.mode);
+    }
+    if (!response || !response.ok) {
+      if (callStream) { callStream.getTracks().forEach(track => track.stop()); callStream = null; }
+      toast(response && response.error ? response.error : "Couldn't open that room.");
+      return;
+    }
+    enterCallRoom(response);
+  } catch (error) {
+    if (callStream) { callStream.getTracks().forEach(track => track.stop()); callStream = null; }
+    if (response && response.ok && socket && socket.connected) socket.emit("call:leave");
+    toast(error.message || "Couldn't start the call.");
+  } finally {
+    callBusy = false;
+    buttons.forEach(button => { button.disabled = false; });
+  }
+}
+function enterCallRoom(data) {
+  callCode = data.code;
+  callMode = data.mode;
+  callPeers.clear();
+  callTiles.clear();
+  $("#callLanding").classList.add("hidden");
+  $("#callLive").classList.remove("hidden");
+  $("#activeCallCode").textContent = callCode;
+  $("#callModeLabel").textContent = callMode === "video" ? "LIVE VIDEO ROOM" : "LIVE VOICE ROOM";
+  $("#callRoomTitle").textContent = callMode === "video" ? "Video hangout" : "Voice hangout";
+  $("#toggleCamera").classList.toggle("hidden", callMode !== "video");
+  $("#toggleMic").textContent = "🎙 Mic on";
+  $("#toggleMic").classList.add("active");
+  $("#toggleCamera").textContent = "▣ Camera on";
+  $("#toggleCamera").classList.add("active");
+  addCallTile(socket.id, me.name + " (you)", true);
+  setCallStatus("Room is ready · Share the four-digit code · 1/4 here");
+  (data.participants || []).forEach(person => {
+    createCallPeer(person.peerId, person.name || "A Pinglet friend", true).catch(error => {
+      console.warn("Call peer setup failed:", error);
+      setCallStatus("Could not connect to " + (person.name || "a participant") + ".");
+    });
+  });
+}
+function addCallTile(peerId, name, local = false) {
+  if (callTiles.has(peerId)) return callTiles.get(peerId);
+  const tile = document.createElement("article");
+  tile.className = "call-tile" + (local ? " is-local" : "");
+  const mediaWrap = document.createElement("div");
+  mediaWrap.className = "call-media-wrap";
+  const media = document.createElement(callMode === "voice" ? "audio" : "video");
+  media.className = "call-media";
+  media.autoplay = true;
+  if (media.tagName === "VIDEO") media.playsInline = true;
+  if (local) media.muted = true;
+  const avatar = document.createElement("div");
+  avatar.className = "call-avatar";
+  avatar.textContent = String(name || "P").trim().charAt(0).toUpperCase() || "P";
+  const nameTag = document.createElement("span");
+  nameTag.className = "call-name";
+  nameTag.textContent = name || "A Pinglet friend";
+  mediaWrap.append(media, avatar);
+  tile.append(mediaWrap, nameTag);
+  $("#callGrid").appendChild(tile);
+  const entry = { tile, media, avatar, nameTag };
+  callTiles.set(peerId, entry);
+  if (local && callStream) {
+    media.srcObject = callStream;
+    if (callMode === "video" && callStream.getVideoTracks().some(track => track.enabled)) tile.classList.add("has-video");
+    media.play().catch(() => {});
+  }
+  return entry;
+}
+async function createCallPeer(peerId, peerName, initiator) {
+  if (!callCode || !peerId || !callStream) return;
+  if (callPeers.has(peerId)) return callPeers.get(peerId);
+  const entry = addCallTile(peerId, peerName, false);
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+  });
+  const peer = { pc, entry, pendingCandidates: [] };
+  callPeers.set(peerId, peer);
+  callStream.getTracks().forEach(track => pc.addTrack(track, callStream));
+  pc.onicecandidate = event => {
+    if (event.candidate && socket && socket.connected) {
+      socket.emit("call:signal", { toPeerId: peerId, candidate: event.candidate });
+    }
+  };
+  pc.ontrack = event => {
+    const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+    entry.media.srcObject = stream;
+    if (callMode === "video" && stream.getVideoTracks().length) {
+      entry.tile.classList.add("has-video");
+      stream.getVideoTracks().forEach(track => {
+        track.onmute = () => entry.tile.classList.remove("has-video");
+        track.onunmute = () => entry.tile.classList.add("has-video");
+      });
+    }
+    entry.media.play().catch(() => setCallStatus("Tap the page once to enable call audio."));
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "failed") setCallStatus("Connection failed for " + peerName + ". Check the network and rejoin.");
+    else if (pc.connectionState === "connected") setCallStatus(peerName + " is connected · " + (1 + callPeers.size) + "/4 here");
+  };
+  if (initiator) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("call:signal", { toPeerId: peerId, description: pc.localDescription });
+  }
+  return peer;
+}
+async function handleCallSignal(payload) {
+  if (!callCode || !payload || !payload.fromPeerId) return;
+  let peer = callPeers.get(payload.fromPeerId);
+  if (!peer) peer = await createCallPeer(payload.fromPeerId, payload.fromName || "A Pinglet friend", false);
+  if (!peer) return;
+  const pc = peer.pc;
+  if (payload.description) {
+    await pc.setRemoteDescription(new RTCSessionDescription(payload.description));
+    if (payload.description.type === "offer") {
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit("call:signal", { toPeerId: payload.fromPeerId, description: pc.localDescription });
+    }
+    while (peer.pendingCandidates.length) {
+      const candidate = peer.pendingCandidates.shift();
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+  } else if (payload.candidate) {
+    if (pc.remoteDescription) await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+    else peer.pendingCandidates.push(payload.candidate);
+  }
+}
+function removeCallPeer(peerId) {
+  if (!peerId) return;
+  const peer = callPeers.get(peerId);
+  if (peer) { peer.pc.close(); callPeers.delete(peerId); }
+  const tile = callTiles.get(peerId);
+  if (tile) { tile.tile.remove(); callTiles.delete(peerId); }
+  if (callCode) setCallStatus("Someone left · " + (1 + callPeers.size) + "/4 here");
+}
+function showCallReaction(payload) {
+  if (!callCode || !payload || !payload.emoji) return;
+  const burst = document.createElement("div");
+  burst.className = "call-reaction-burst";
+  burst.textContent = payload.emoji;
+  burst.setAttribute("aria-label", (payload.name || "Someone") + " reacted");
+  $("#callGrid").appendChild(burst);
+  setTimeout(() => burst.remove(), 1500);
+}
+function resetCallUi() {
+  callPeers.forEach(peer => peer.pc.close());
+  callPeers.clear();
+  callTiles.clear();
+  if (callStream) callStream.getTracks().forEach(track => track.stop());
+  callStream = null;
+  callCode = null;
+  callMode = null;
+  const grid = $("#callGrid");
+  if (grid) grid.replaceChildren();
+  $("#callLive").classList.add("hidden");
+  $("#callLanding").classList.remove("hidden");
+}
+function leaveCallRoom() {
+  if (socket && socket.connected && callCode) socket.emit("call:leave");
+  resetCallUi();
+  toast("You left the call room.");
+}
+$("#createVideoRoom").addEventListener("click", () => openCallRoom("create", "video"));
+$("#createVoiceRoom").addEventListener("click", () => openCallRoom("create", "voice"));
+$("#joinCallForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const input = $("#callRoomCode");
+  const code = input.value.trim();
+  if (!/^\d{4}$/.test(code)) { toast("Enter the four-digit room code."); input.focus(); return; }
+  openCallRoom("join", code);
+});
+$("#callRoomCode").addEventListener("input", event => {
+  event.target.value = event.target.value.replace(/\D/g, "").slice(0, 4);
+});
+$("#copyCallCode").addEventListener("click", async () => {
+  if (!callCode) return;
+  try { await copyText(callCode); toast("Room code copied. Share it with your people."); }
+  catch { toast("Room code: " + callCode); }
+});
+$("#toggleMic").addEventListener("click", () => {
+  if (!callStream) return;
+  const tracks = callStream.getAudioTracks();
+  const enabled = !tracks.every(track => track.enabled);
+  tracks.forEach(track => { track.enabled = enabled; });
+  $("#toggleMic").textContent = enabled ? "🎙 Mic on" : "🔇 Mic muted";
+  $("#toggleMic").classList.toggle("active", enabled);
+});
+$("#toggleCamera").addEventListener("click", () => {
+  if (!callStream || callMode !== "video") return;
+  const tracks = callStream.getVideoTracks();
+  const enabled = !tracks.every(track => track.enabled);
+  tracks.forEach(track => { track.enabled = enabled; });
+  const localTile = callTiles.get(socket.id);
+  if (localTile) localTile.tile.classList.toggle("has-video", enabled);
+  $("#toggleCamera").textContent = enabled ? "▣ Camera on" : "◌ Camera off";
+  $("#toggleCamera").classList.toggle("active", enabled);
+});
+$("#leaveCall").addEventListener("click", leaveCallRoom);
+document.querySelectorAll("[data-call-reaction]").forEach(button => button.addEventListener("click", () => {
+  if (socket && callCode) socket.emit("call:reaction", { emoji: button.dataset.callReaction });
+}));
+
 function drawSnake() {
   const canvas = $("#snakeCanvas");
   if (!canvas) return;
