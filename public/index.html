@@ -39,10 +39,12 @@
   </div>
   <div class="side-title"><span>YOUR CIRCLE</span><button id="addFriend" class="plus" title="Add a friend" aria-label="Add a friend">+</button></div>
   <label class="friend-search"><span aria-hidden="true">⌕</span><input id="friendSearch" type="search" placeholder="Find a friend…" autocomplete="off" aria-label="Search friends"></label>
+  <div class="friend-filters" role="group" aria-label="Filter friends"><button class="friend-filter active" data-friend-filter="all" aria-pressed="true">Everyone</button><button class="friend-filter" data-friend-filter="special" aria-pressed="false">Close circle</button></div>
   <div id="friends" class="friends"><p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p></div>
   <div class="request-heading"><span>INCOMING REQUESTS</span><span id="requestCount" class="count-badge">0</span></div>
   <div id="requests" class="requests"><p class="empty">No new requests.</p></div>
   <div class="side-bottom">
+   <button id="homeNav" class="nav-btn active" title="Chats" aria-current="page"><span>◉</span><b>Chats</b></button>
    <button id="requestsNav" class="nav-btn" aria-expanded="false" title="Friend requests"><span>✉</span><b>Requests</b></button>
    <button id="gamesNav" class="nav-btn" title="Mini games"><span>✳</span><b>Play</b></button>
    <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
@@ -67,6 +69,12 @@
     <p>Bring your people a little closer. Add a friend with a code or QR invite, then keep the conversation going.</p>
     <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add your first friend</button><button class="ghost" id="welcomeShare">Share your invite ↗</button></div>
     <div class="welcome-trust"><span>✦ Friendship-first</span><span>✦ Made for little moments</span></div>
+    <div class="welcome-stats" aria-label="Your Pinglet activity">
+     <div class="welcome-stat"><b id="circleStat">0</b><span>IN YOUR CIRCLE</span></div>
+     <div class="welcome-stat"><b id="requestsStat">0</b><span>NEW REQUESTS</span></div>
+     <div class="welcome-stat"><b>∞</b><span>WAYS TO SAY HELLO</span></div>
+    </div>
+    <div class="spark-card"><div><span class="spark-label">A LITTLE CONVERSATION SPARK</span><p id="sparkPrompt">What's one tiny thing that made you smile today?</p></div><button id="sparkNext" class="spark-next" title="Another conversation starter" aria-label="Show another conversation starter">↻</button></div>
    </div>
    <div class="welcome-visual" aria-hidden="true">
     <div class="visual-orbit orbit-a"></div><div class="visual-orbit orbit-b"></div>
@@ -80,15 +88,17 @@
   <section id="chat" class="chat hidden">
    <div class="friend-head">
     <div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div>
-    <div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label" aria-label="Change friendship label">✎</button></div>
+    <div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label" aria-label="Change friendship label">✎</button><button class="icon-btn" id="peerCopyCode" title="Copy friend's code" aria-label="Copy friend's code">▢</button></div>
    </div>
+   <div class="chat-starters" aria-label="Quick message ideas"><span>START WITH</span><button type="button" data-quick-message="Hey! How's your day going?">A little hello</button><button type="button" data-quick-message="Something reminded me of you today.">Thought of you</button><button type="button" data-quick-message="What's one good thing that happened today?">One good thing</button></div>
    <div id="messages" class="messages" aria-live="polite" aria-relevant="additions text"></div>
    <form id="sendForm" class="composer"><input id="messageInput" maxlength="2000" placeholder="Write something nice…" autocomplete="off" aria-label="Write a message"><button class="send" type="submit" aria-label="Send message">↗</button></form>
-   <p class="composer-note">Messages use experimental encryption. Friend identity keys are not verified.</p>
+   <div class="composer-meta"><p class="composer-note">Messages use experimental encryption. Friend identity keys are not verified.</p><span id="messageCounter">0 / 2000</span></div>
   </section>
   <section id="games" class="games hidden">
    <div class="game-card"><div class="game-icon">✊</div><p class="eyebrow">QUICK PLAY</p><h2>Rock, paper, scissors</h2><p class="muted">A tiny game while you catch up.</p>
-    <div class="choices"><button data-choice="rock" aria-label="Choose rock">✊<small>Rock</small></button><button data-choice="paper" aria-label="Choose paper">✋<small>Paper</small></button><button data-choice="scissors" aria-label="Choose scissors">✌️<small>Scissors</small></button></div><h3 id="gameResult" aria-live="polite">Choose your move.</h3><button id="resetGame" class="ghost">Play again</button>
+    <div class="rps-scoreboard"><div><b id="rpsWins">0</b><small>WINS</small></div><div><b id="rpsRounds">0</b><small>ROUNDS</small></div><div><b id="rpsWinRate">0%</b><small>WIN RATE</small></div></div>
+    <div class="choices"><button data-choice="rock" aria-label="Choose rock"><span>✊</span><small>Rock</small></button><button data-choice="paper" aria-label="Choose paper"><span>✋</span><small>Paper</small></button><button data-choice="scissors" aria-label="Choose scissors"><span>✌️</span><small>Scissors</small></button></div><h3 id="gameResult" aria-live="polite">Choose your move.</h3><button id="resetGame" class="ghost">Reset score</button>
    </div>
    <div class="game-card snake-card">
     <div class="game-icon">🐍</div><p class="eyebrow">1 VS 1 ONLINE</p><h2>Snake Duel</h2><p class="muted" id="snakeHelp">Open a saved friend's chat, then invite them here. Both players control their own snake.</p>
