@@ -55,6 +55,11 @@ check("Voice clip and message request sizes are bounded",
 check("Call room and RPS views have hidden-state styling",
   css.includes(".call-rooms.hidden{display:none!important}") &&
   css.includes(".games"));
+check("Read-only API requests retry transient wake-up errors",
+  app.includes("const canRetry = method === \"GET\"") &&
+  app.includes("[502, 503, 504]") &&
+  app.includes("Waking up…") &&
+  app.includes("retryDelays"));
 check("Shared web and Android motion system",
   css.includes("Pinglet motion system") &&
   css.includes("pinglet-ambient-drift") &&
@@ -62,6 +67,6 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v10"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v11"/.test(sw));
 
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
