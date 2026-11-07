@@ -9,6 +9,8 @@ let rpsWins = Number(localStorage.getItem("pinglet_rps_wins") || 0);
 let rpsRounds = Number(localStorage.getItem("pinglet_rps_rounds") || 0);
 const encoder = new TextEncoder(), decoder = new TextDecoder();
 const chatKeyCache = new Map();
+const voiceObjectUrls = new Set();
+let voiceRecorder = null, voiceChunks = [], voiceStartedAt = 0, voiceAbort = false, voicePointerId = null;
 const inviteMatch = location.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
 if (inviteMatch) {
   sessionStorage.setItem("pinglet_pending_invite", inviteMatch[1].toUpperCase());
@@ -385,7 +387,25 @@ async function loadMessages() {
     const rendered = await Promise.all((data.messages || []).map(async message => {
       const bubble = document.createElement("div");
       bubble.className = "bubble " + (message.sender === me.id ? "mine" : "theirs");
-      bubble.textContent = await decryptMessage(message, activePeer);
+      const clear = await decryptMessage(message, activePeer);
+      if (clear.startsWith("PINGLET_VOICE_V1|")) {
+        const parts = clear.split("|");
+        const mime = parts[1] || "audio/webm";
+        const bytes = base64ToBytes(parts.slice(2).join("|"));
+        const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        voiceObjectUrls.add(url);
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.preload = "metadata";
+        audio.src = url;
+        audio.className = "voice-message-player";
+        const label = document.createElement("span");
+        label.className = "voice-message-label";
+        label.textContent = "🎙 Voice message";
+        bubble.append(label, audio);
+      } else {
+        bubble.textContent = clear;
+      }
       const time = document.createElement("time");
       time.textContent = new Date(message.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       bubble.appendChild(time);
@@ -394,6 +414,8 @@ async function loadMessages() {
     // A slower response for the previous chat must not overwrite the newly opened chat.
     if (!peer || peer.id !== activePeer.id) return;
     const list = $("#messages");
+    voiceObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    voiceObjectUrls.clear();
     list.replaceChildren();
     if (!rendered.length) {
       const empty = document.createElement("p");
@@ -423,6 +445,97 @@ $("#sendForm").addEventListener("submit", async event => {
   } catch (error) { toast(error.message); }
   finally { sendButton.disabled = false; }
 });
+/* Walkie-talkie voice messages are encrypted before storage and limited to short clips. */
+const voiceMaxDurationMs = 8000;
+const voiceMaxBytes = 36 * 1024;
+function voiceMimeType() {
+  if (!window.MediaRecorder) throw new Error("Voice recording isn't supported in this browser.");
+  const choices = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return choices.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+async function beginVoiceMessage(event) {
+  if (voiceRecorder || !peer) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast("Microphone access isn't available. Open Pinglet over HTTPS in a supported browser.");
+    return;
+  }
+  try {
+    voiceAbort = false;
+    voicePointerId = event && event.pointerId !== undefined ? event.pointerId : null;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+    if (!peer || !$("#chat").classList.contains("view-enter") && $("#chat").classList.contains("hidden")) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    const mimeType = voiceMimeType();
+    voiceChunks = [];
+    voiceRecorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 });
+    voiceStartedAt = Date.now();
+    const button = $("#walkieTalkie");
+    button.classList.add("recording");
+    button.querySelector("small").textContent = "RECORDING · RELEASE TO SEND";
+    voiceRecorder.ondataavailable = item => { if (item.data && item.data.size) voiceChunks.push(item.data); };
+    voiceRecorder.onerror = () => { voiceAbort = true; finishVoiceMessage(); };
+    voiceRecorder.onstop = async () => {
+      const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || mimeType || "audio/webm" });
+      stream.getTracks().forEach(track => track.stop());
+      voiceRecorder = null;
+      voiceChunks = [];
+      button.classList.remove("recording");
+      button.querySelector("small").textContent = "HOLD TO TALK";
+      if (voiceAbort) { toast("Voice recording cancelled."); return; }
+      if (blob.size < 500) { toast("That voice message was too short. Try again."); return; }
+      if (blob.size > voiceMaxBytes) { toast("That clip is too large. Keep voice messages to 8 seconds or less."); return; }
+      const activePeer = peer;
+      if (!activePeer) return;
+      button.disabled = true;
+      try {
+        const bytes = await blob.arrayBuffer();
+        const payload = "PINGLET_VOICE_V1|" + (blob.type || "audio/webm") + "|" + bytesToBase64(bytes);
+        const encrypted = await encryptMessage(payload, activePeer);
+        await api("/messages", { method: "POST", body: JSON.stringify({ recipient: activePeer.id, ...encrypted }) });
+        if (peer && peer.id === activePeer.id) await loadMessages();
+      } catch (error) { toast(error.message || "Could not send that voice message."); }
+      finally { button.disabled = false; }
+    };
+    voiceRecorder.start(250);
+    setTimeout(() => { if (voiceRecorder && voiceRecorder.state === "recording") finishVoiceMessage(); }, voiceMaxDurationMs);
+  } catch (error) {
+    if (voiceRecorder && voiceRecorder.stream) voiceRecorder.stream.getTracks().forEach(track => track.stop());
+    voiceRecorder = null;
+    const button = $("#walkieTalkie");
+    button.classList.remove("recording");
+    button.querySelector("small").textContent = "HOLD TO TALK";
+    toast(error.name === "NotAllowedError" ? "Allow microphone access to send a voice message." : (error.message || "Could not start voice recording."));
+  }
+}
+function finishVoiceMessage() {
+  if (!voiceRecorder || voiceRecorder.state === "inactive") return;
+  try { voiceRecorder.stop(); } catch { voiceRecorder = null; }
+}
+function cancelVoiceMessage() {
+  if (!voiceRecorder) return;
+  voiceAbort = true;
+  finishVoiceMessage();
+}
+const walkieButton = $("#walkieTalkie");
+walkieButton.addEventListener("pointerdown", event => {
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+  try { walkieButton.setPointerCapture(event.pointerId); } catch {}
+  beginVoiceMessage(event);
+});
+walkieButton.addEventListener("pointerup", event => {
+  if (voicePointerId !== null && event.pointerId !== voicePointerId) return;
+  voicePointerId = null;
+  finishVoiceMessage();
+});
+walkieButton.addEventListener("pointercancel", () => { voicePointerId = null; cancelVoiceMessage(); });
+walkieButton.addEventListener("lostpointercapture", () => {
+  if (voiceRecorder && voiceRecorder.state === "recording") finishVoiceMessage();
+});
+walkieButton.addEventListener("contextmenu", event => event.preventDefault());
+
 async function copyText(value) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     await navigator.clipboard.writeText(value);
