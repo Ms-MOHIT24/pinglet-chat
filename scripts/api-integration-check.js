@@ -46,6 +46,21 @@ function socketAck(socket, event, payload) {
     socket.emit(event, payload, result => { clearTimeout(timer); resolve(result); });
   });
 }
+function nextSocketEventWhere(socket, event, predicate, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const onEvent = data => {
+      if (predicate(data)) { clearTimeout(timer); resolve(data); }
+      else if (Date.now() >= deadline) { clearTimeout(timer); reject(new Error("Timed out waiting for matching socket event: " + event)); }
+      else socket.once(event, onEvent);
+    };
+    const timer = setTimeout(() => {
+      socket.off(event, onEvent);
+      reject(new Error("Timed out waiting for matching socket event: " + event));
+    }, timeoutMs);
+    socket.once(event, onEvent);
+  });
+}
 function pass(label) { process.stdout.write("PASS  " + label + "\n"); }
 async function waitForServer() {
   const deadline = Date.now() + 30000;
@@ -191,10 +206,9 @@ async function main() {
     aliceSocket.emit("snake:join", { peerId: bobId });
     const invite = await incomingSnakeInvite;
     assert.equal(invite.fromId, aliceId);
-    const aliceSnakeState = nextSocketEvent(aliceSocket, "snake:state");
+    const aliceSnakeState = nextSocketEventWhere(aliceSocket, "snake:state", state => state.status === "playing");
     bobSocket.emit("snake:join", { peerId: aliceId });
     const gameState = await aliceSnakeState;
-    assert.equal(gameState.status, "playing");
     assert.equal(gameState.players.length, 2);
     pass("Snake Duel friend invitations and two-player game start work");
 
