@@ -34,6 +34,7 @@
   <div class="profile">
     <div class="avatar profile-avatar" id="myAvatar">M</div>
     <div class="profile-name"><b id="myName">You</b><small>YOUR FRIEND CODE</small><strong id="myCode">FRIEND CODE</strong></div>
+    <button id="scanQr" class="icon-btn" title="Scan a friend's QR invite" aria-label="Scan a friend's QR invite">⌗</button>
     <button id="shareQr" class="icon-btn" title="Show your QR invite" aria-label="Show your QR invite">▦</button>
     <button id="copyCode" class="icon-btn" title="Copy friend code" aria-label="Copy friend code">▢</button>
   </div>
@@ -67,7 +68,7 @@
     <p class="eyebrow">YOUR SPACE IS READY</p>
     <h2>Good things happen<br><em>in your own circle.</em></h2>
     <p>Bring your people a little closer. Add a friend with a code or QR invite, then keep the conversation going.</p>
-    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add your first friend</button><button class="ghost" id="welcomeShare">Share your invite ↗</button></div>
+    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add a friend</button><button class="ghost" id="welcomeScan">⌗ Scan a QR</button><button class="ghost" id="welcomeShare">Share your QR ↗</button></div>
     <div class="welcome-trust"><span>✦ Friendship-first</span><span>✦ Made for little moments</span></div>
     <div class="welcome-stats" aria-label="Your Pinglet activity">
      <div class="welcome-stat"><b id="circleStat">0</b><span>IN YOUR CIRCLE</span></div>
@@ -118,5 +119,24 @@
 </main>
 <div id="themeModal" class="modal hidden"><div class="modal-card theme-modal"><button class="modal-close" id="themeClose">×</button><p class="eyebrow">MAKE PINGLET YOURS</p><h2>Choose your world</h2><p class="muted">Pick a look for your app. Your choice is saved on this device.</p><div id="themeGrid" class="theme-grid"><button class="theme-option" data-theme-choice="galaxy"><span class="theme-swatch galaxy-swatch">✦</span><b>Galaxy</b><small>Cosmic purple</small></button><button class="theme-option" data-theme-choice="aurora"><span class="theme-swatch aurora-swatch">✧</span><b>Aurora</b><small>Northern lights</small></button><button class="theme-option" data-theme-choice="nature"><span class="theme-swatch nature-swatch">🌿</span><b>Nature</b><small>Forest green</small></button><button class="theme-option" data-theme-choice="ocean"><span class="theme-swatch ocean-swatch">🌊</span><b>Ocean</b><small>Deep blue</small></button><button class="theme-option" data-theme-choice="sakura"><span class="theme-swatch sakura-swatch">🌸</span><b>Sakura</b><small>Soft pink</small></button><button class="theme-option" data-theme-choice="cute"><span class="theme-swatch cute-swatch">🐻</span><b>Cute</b><small>Pastel peach</small></button><button class="theme-option" data-theme-choice="pawprint"><span class="theme-swatch paw-swatch">🐾</span><b>Animal Paws</b><small>Warm and playful</small></button><button class="theme-option" data-theme-choice="midnight"><span class="theme-swatch midnight-swatch">☾</span><b>Midnight</b><small>Minimal dark</small></button></div><div class="custom-wallpaper"><b>Use your favourite character wallpaper</b><p class="muted">Upload an image saved on your device. It stays in this browser only.</p><label class="upload-wallpaper">Choose an image<input id="wallpaperUpload" type="file" accept="image/png,image/jpeg,image/webp"></label><button id="clearWallpaper" class="ghost">Remove custom wallpaper</button></div></div></div>
 <div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Send friend request →</button></form><div id="qrShareContent" class="qr-share hidden"></div><p id="modalError" class="error"></p></div></div>
+<div id="scannerModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scannerTitle">
+ <div class="scanner-card">
+  <div class="scanner-header"><div><p class="eyebrow">FIND YOUR PEOPLE</p><h2 id="scannerTitle">Scan a Pinglet QR</h2><p class="muted">Point your camera at a friend's invite code.</p></div><button class="modal-close" id="scannerClose" aria-label="Close scanner">×</button></div>
+  <div class="scanner-view" id="scannerView">
+   <video id="scannerVideo" playsinline muted aria-label="Camera preview for QR scanning"></video>
+   <div class="scanner-placeholder" id="scannerPlaceholder"><span>⌗</span><b>Your camera view will appear here</b><small>Allow camera access when your browser asks.</small></div>
+   <div class="scanner-frame" aria-hidden="true"><i></i><i></i><i></i><i></i><span></span></div>
+  </div>
+  <p id="scannerStatus" class="scanner-status" role="status" aria-live="polite">Camera access is only used to read a QR code on this device.</p>
+  <div class="scanner-actions">
+   <button id="scannerTorch" class="ghost hidden" type="button">☼ Torch off</button>
+   <label class="scanner-upload">▧ Upload QR image<input id="qrImageInput" type="file" accept="image/*" capture="environment"></label>
+   <button id="scannerManual" class="ghost" type="button">Enter code instead</button>
+  </div>
+  <canvas id="scannerCanvas" class="hidden"></canvas>
+  <p class="scanner-privacy">Your camera feed and uploaded image stay on this device. Nothing is sent to Pinglet until you confirm a recognised invite.</p>
+ </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script src="/app.js"></script>
 </body></html>
