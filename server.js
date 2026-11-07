@@ -36,8 +36,10 @@ async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id UUID PRIMARY KEY, name VARCHAR(24) NOT NULL, code VARCHAR(14) UNIQUE NOT NULL,
-      password TEXT NOT NULL, pubkey JSONB NOT NULL, created TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      password TEXT NOT NULL, pubkey JSONB NOT NULL, terms_accepted_at TIMESTAMPTZ,
+      created TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
     CREATE TABLE IF NOT EXISTS messages (
       id UUID PRIMARY KEY, conversation TEXT NOT NULL,
       sender UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -59,6 +61,25 @@ async function initializeDatabase() {
       PRIMARY KEY(user_id, friend_id), CHECK(user_id <> friend_id)
     );
     CREATE INDEX IF NOT EXISTS friendships_friend_idx ON friendships(friend_id);
+    CREATE TABLE IF NOT EXISTS blocked_users (
+      blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(blocker_id, blocked_id), CHECK(blocker_id <> blocked_id)
+    );
+    CREATE INDEX IF NOT EXISTS blocked_users_blocked_idx ON blocked_users(blocked_id);
+    CREATE TABLE IF NOT EXISTS reports (
+      id UUID PRIMARY KEY,
+      reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      reported_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      category VARCHAR(32) NOT NULL CHECK (category IN ('harassment','sexual_exploitation','threats','spam','impersonation','other')),
+      details TEXT NOT NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','reviewing','actioned','dismissed')),
+      moderation_notes TEXT,
+      created TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS reports_status_created_idx ON reports(status, created DESC);
   `);
 }
 const friendCode = () => crypto.randomBytes(7).toString("hex").toUpperCase();
@@ -82,6 +103,11 @@ async function areFriends(a, b) {
   const result = await pool.query("SELECT 1 FROM friendships WHERE user_id=$1 AND friend_id=$2", [a, b]);
   return result.rowCount > 0;
 }
+async function areBlockedEither(a, b) {
+  const result = await pool.query("SELECT 1 FROM blocked_users WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1", [a, b]);
+  return result.rowCount > 0;
+}
+function validUserId(value) { return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 const labelOptions = ["Friend", "True Friend", "Bestie", "Love", "Partner in Crime", "My Person"];
 
 app.get("/health", async (req, res) => {
@@ -92,13 +118,13 @@ app.post("/api/register", authLimiter, async (req, res) => {
   try {
     const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
     const password = req.body.password, pubkey = req.body.pubkey;
-    if (!name || name.length > 24 || typeof password !== "string" || password.length < 8 || password.length > 128 || !validPubkey(pubkey)) {
-      return res.status(400).json({ error: "Enter a name, valid public key and an 8–128 character password." });
+    if (!name || name.length > 24 || typeof password !== "string" || password.length < 8 || password.length > 128 || !validPubkey(pubkey) || req.body.termsAccepted !== true) {
+      return res.status(400).json({ error: "Enter a name, a valid public key, an 8–128 character password, and accept the Terms of Use." });
     }
     let code;
     do { code = friendCode(); } while ((await pool.query("SELECT 1 FROM users WHERE code=$1", [code])).rowCount);
     const id = crypto.randomUUID();
-    await pool.query("INSERT INTO users(id,name,code,password,pubkey) VALUES($1,$2,$3,$4,$5::jsonb)", [id, name, code, await bcrypt.hash(password, 12), JSON.stringify(pubkey)]);
+    await pool.query("INSERT INTO users(id,name,code,password,pubkey,terms_accepted_at) VALUES($1,$2,$3,$4,$5::jsonb,NOW())", [id, name, code, await bcrypt.hash(password, 12), JSON.stringify(pubkey)]);
     meNameCache.set(id, name);
     const user = { id, name, code, pubkey };
     res.json({ token: tokenFor(user), user });
@@ -119,9 +145,25 @@ app.post("/api/login", authLimiter, async (req, res) => {
   } catch { res.status(400).json({ error: "Invalid sign-in request." }); }
 });
 app.get("/api/me", auth, async (req, res) => {
-  const result = await pool.query("SELECT id,name,code,pubkey FROM users WHERE id=$1", [req.user.id]);
+  const result = await pool.query("SELECT id,name,code,pubkey,(terms_accepted_at IS NOT NULL) AS \"termsAccepted\" FROM users WHERE id=$1", [req.user.id]);
   if (!result.rowCount) return res.status(404).json({ error: "Account not found." });
   res.json({ user: result.rows[0] });
+});
+app.post("/api/me/terms", auth, async (req, res) => {
+  if (req.body.accepted !== true) return res.status(400).json({ error: "Please confirm that you accept the Terms of Use." });
+  await pool.query("UPDATE users SET terms_accepted_at=COALESCE(terms_accepted_at,NOW()) WHERE id=$1", [req.user.id]);
+  res.json({ accepted: true });
+});
+app.delete("/api/me", auth, authLimiter, async (req, res) => {
+  const password = req.body && req.body.password;
+  if (typeof password !== "string" || password.length > 128) return res.status(400).json({ error: "Enter your password to confirm account deletion." });
+  const found = await pool.query("SELECT password FROM users WHERE id=$1", [req.user.id]);
+  if (!found.rowCount) return res.status(404).json({ error: "Account not found." });
+  if (!await bcrypt.compare(password, found.rows[0].password)) return res.status(401).json({ error: "Password is incorrect. Your account was not deleted." });
+  await pool.query("DELETE FROM users WHERE id=$1", [req.user.id]);
+  meNameCache.delete(req.user.id);
+  io.in(req.user.id).disconnectSockets(true);
+  res.json({ deleted: true });
 });
 app.get("/api/me/invite-qr", auth, async (req, res) => {
   const result = await pool.query("SELECT code FROM users WHERE id=$1", [req.user.id]);
@@ -157,6 +199,7 @@ app.post("/api/friend-requests", auth, async (req, res) => {
   const target = found.rows[0];
   if (!target) return res.status(404).json({ error: "No account uses that friend code." });
   if (target.id === req.user.id) return res.status(400).json({ error: "That's your own friend code." });
+  if (await areBlockedEither(req.user.id, target.id)) return res.status(403).json({ error: "This connection is unavailable." });
   if (await areFriends(req.user.id, target.id)) return res.json({ status: "friends", friend: target });
   const reverse = await pool.query("SELECT id FROM friend_requests WHERE sender_id=$1 AND receiver_id=$2 AND status='pending'", [target.id, req.user.id]);
   if (reverse.rowCount) {
@@ -189,6 +232,7 @@ app.post("/api/friend-requests/:id/accept", auth, async (req, res) => {
     const found = await client.query("SELECT id,sender_id FROM friend_requests WHERE id=$1 AND receiver_id=$2 AND status='pending' FOR UPDATE", [req.params.id, req.user.id]);
     if (!found.rowCount) { await client.query("ROLLBACK"); return res.status(404).json({ error: "Friend request not found." }); }
     const request = found.rows[0];
+    if (await areBlockedEither(req.user.id, request.sender_id)) { await client.query("ROLLBACK"); return res.status(403).json({ error: "This connection is unavailable." }); }
     await client.query("INSERT INTO friendships(user_id,friend_id) VALUES($1,$2),($2,$1) ON CONFLICT DO NOTHING", [req.user.id, request.sender_id]);
     await client.query("UPDATE friend_requests SET status='accepted' WHERE id=$1", [request.id]);
     await client.query("COMMIT");
@@ -212,6 +256,67 @@ app.patch("/api/friends/:id/label", auth, async (req, res) => {
   const result = await pool.query("UPDATE friendships SET label=$1 WHERE user_id=$2 AND friend_id=$3 RETURNING label", [label, req.user.id, req.params.id]);
   if (!result.rowCount) return res.status(404).json({ error: "Saved friend not found." });
   res.json({ label });
+});
+
+/* In-app user safety: blocking, reporting and a protected moderation inbox. */
+app.get("/api/blocks", auth, async (req, res) => {
+  const result = await pool.query("SELECT u.id,u.name,b.created FROM blocked_users b JOIN users u ON u.id=b.blocked_id WHERE b.blocker_id=$1 ORDER BY b.created DESC", [req.user.id]);
+  res.json({ blocked: result.rows });
+});
+app.post("/api/users/:id/block", auth, lookupLimiter, async (req, res) => {
+  const blockedId = req.params.id;
+  if (!validUserId(blockedId)) return res.status(400).json({ error: "Invalid account." });
+  if (blockedId === req.user.id) return res.status(400).json({ error: "You cannot block your own account." });
+  const exists = await pool.query("SELECT 1 FROM users WHERE id=$1", [blockedId]);
+  if (!exists.rowCount) return res.status(404).json({ error: "Account not found." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("INSERT INTO blocked_users(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING", [req.user.id, blockedId]);
+    await client.query("DELETE FROM friendships WHERE (user_id=$1 AND friend_id=$2) OR (user_id=$2 AND friend_id=$1)", [req.user.id, blockedId]);
+    await client.query("UPDATE friend_requests SET status='declined' WHERE status='pending' AND ((sender_id=$1 AND receiver_id=$2) OR (sender_id=$2 AND receiver_id=$1))", [req.user.id, blockedId]);
+    await client.query("COMMIT");
+  } catch (error) { await client.query("ROLLBACK"); throw error; }
+  finally { client.release(); }
+  removeBlockedPairFromCalls(req.user.id, blockedId);
+  io.to(blockedId).emit("blocked", { by: req.user.id });
+  res.json({ blocked: true });
+});
+app.delete("/api/users/:id/block", auth, lookupLimiter, async (req, res) => {
+  if (!validUserId(req.params.id)) return res.status(400).json({ error: "Invalid account." });
+  await pool.query("DELETE FROM blocked_users WHERE blocker_id=$1 AND blocked_id=$2", [req.user.id, req.params.id]);
+  res.json({ blocked: false });
+});
+app.post("/api/reports", auth, lookupLimiter, async (req, res) => {
+  const { reportedUserId, category, details } = req.body || {};
+  const allowed = ["harassment", "sexual_exploitation", "threats", "spam", "impersonation", "other"];
+  if (!validUserId(reportedUserId) || reportedUserId === req.user.id || !allowed.includes(category) || typeof details !== "string" || details.trim().length < 5 || details.length > 3000) {
+    return res.status(400).json({ error: "Choose a reason and add at least a few details (up to 3,000 characters)." });
+  }
+  const exists = await pool.query("SELECT 1 FROM users WHERE id=$1", [reportedUserId]);
+  if (!exists.rowCount) return res.status(404).json({ error: "Account not found." });
+  const report = await pool.query("INSERT INTO reports(id,reporter_id,reported_user_id,category,details) VALUES($1,$2,$3,$4,$5) RETURNING id,created", [crypto.randomUUID(), req.user.id, reportedUserId, category, details.trim()]);
+  res.status(201).json({ submitted: true, reportId: report.rows[0].id, created: report.rows[0].created });
+});
+function moderationAuth(req, res, next) {
+  const expected = process.env.REPORTS_ADMIN_TOKEN || "";
+  const supplied = (req.headers.authorization || "").replace(/^Bearer /, "");
+  if (Buffer.byteLength(expected) < 32) return res.status(503).json({ error: "The moderation inbox is not configured by the service operator." });
+  const a = Buffer.from(supplied), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: "Unauthorized." });
+  next();
+}
+app.get("/api/moderation/reports", moderationAuth, async (req, res) => {
+  const status = ["pending", "reviewing", "actioned", "dismissed"].includes(req.query.status) ? req.query.status : "pending";
+  const result = await pool.query("SELECT id,reporter_id,reported_user_id,category,details,status,moderation_notes,created,reviewed FROM reports WHERE status=$1 ORDER BY created ASC LIMIT 100", [status]);
+  res.json({ reports: result.rows });
+});
+app.patch("/api/moderation/reports/:id", moderationAuth, async (req, res) => {
+  const { status, notes } = req.body || {};
+  if (!["reviewing", "actioned", "dismissed"].includes(status) || (notes !== undefined && (typeof notes !== "string" || notes.length > 2000))) return res.status(400).json({ error: "Invalid moderation update." });
+  const result = await pool.query("UPDATE reports SET status=$1,moderation_notes=$2,reviewed=NOW() WHERE id=$3 RETURNING id,status,reviewed", [status, notes || null, req.params.id]);
+  if (!result.rowCount) return res.status(404).json({ error: "Report not found." });
+  res.json({ report: result.rows[0] });
 });
 app.get("/api/messages/:peer", auth, async (req, res) => {
   const peer = req.params.peer;
@@ -315,6 +420,16 @@ function leaveCallRoom(socket, notify = true) {
   if (notify) io.to(callRoomName(code)).emit("call:participant-left", { peerId: socket.id });
   if (!room.participants.size) callRooms.delete(code);
 }
+function removeBlockedPairFromCalls(firstUserId, secondUserId) {
+  for (const room of callRooms.values()) {
+    const pair = [...room.participants.entries()].filter(([, person]) => person.userId === firstUserId || person.userId === secondUserId);
+    if (pair.length < 2) continue;
+    for (const [socketId] of pair) {
+      const client = io.sockets.sockets.get(socketId);
+      if (client) leaveCallRoom(client);
+    }
+  }
+}
 io.use((socket,next) => {
   try { socket.user=jwt.verify(socket.handshake.auth.token,SECRET,{issuer:"pinglet",audience:"pinglet-web"}); next(); }
   catch { next(new Error("Unauthorized")); }
@@ -337,7 +452,7 @@ io.on("connection", socket => {
     respond({ ok: true, code, mode, participants: [] });
   });
 
-  socket.on("call:join", ({ code } = {}, reply) => {
+  socket.on("call:join", async ({ code } = {}, reply) => {
     const respond = typeof reply === "function" ? reply : () => {};
     const now = Date.now();
     let attempts = callJoinAttempts.get(userId);
@@ -352,6 +467,11 @@ io.on("connection", socket => {
     if (socket.data.callRoomCode) return respond({ ok: false, error: "Leave your current call before joining another room." });
     const room = callRooms.get(roomCode);
     if (!room) return respond({ ok: false, error: "That room code is unavailable. Check the code or create a new room." });
+    for (const participant of room.participants.values()) {
+      if (await areBlockedEither(userId, participant.userId) || !await areFriends(userId, participant.userId)) {
+        return respond({ ok: false, error: "Call rooms are for saved friends. Add the host as a friend first." });
+      }
+    }
     if (room.participants.size >= callRoomCapacity) return respond({ ok: false, error: "This room is full (4 people maximum)." });
     const existing = [...room.participants.entries()].map(([peerId, person]) => ({ peerId, userId: person.userId, name: person.name }));
     room.participants.set(socket.id, { userId, name: meNameCache.get(userId) || "A Pinglet friend" });
@@ -363,11 +483,13 @@ io.on("connection", socket => {
     });
   });
 
-  socket.on("call:signal", ({ toPeerId, description, candidate } = {}) => {
+  socket.on("call:signal", async ({ toPeerId, description, candidate } = {}) => {
     const code = socket.data.callRoomCode;
     const room = code && callRooms.get(code);
     if (!room || typeof toPeerId !== "string" || toPeerId === socket.id || !room.participants.has(toPeerId)) return;
     const sender = room.participants.get(socket.id);
+    const recipient = room.participants.get(toPeerId);
+    if (await areBlockedEither(sender.userId, recipient.userId)) return;
     if (description && (["offer", "answer"].includes(description.type) && typeof description.sdp === "string" && description.sdp.length <= 20000)) {
       io.to(toPeerId).emit("call:signal", { fromPeerId: socket.id, fromName: sender.name, description });
     } else if (candidate && typeof candidate.candidate === "string" && candidate.candidate.length <= 4096) {
