@@ -19,6 +19,7 @@
       <label id="nameWrap">Your name<input id="name" maxlength="24" autocomplete="nickname" placeholder="What should friends call you?" required></label>
       <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="14" placeholder="Your 14-character code"></label>
       <label>Password<input id="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" placeholder="At least 8 characters" required></label>
+      <label id="termsConsentWrap" class="terms-consent"><input id="termsAccepted" type="checkbox" required><span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Use</a> and have read the <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <button class="primary wide" id="authSubmit">Create my space <span aria-hidden="true">↗</span></button>
     </form>
     <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError" role="alert"></p>
@@ -50,6 +51,7 @@
    <a id="gamesNav" class="nav-btn" href="/games" title="Open games"><span>✳</span><b>Games</b></a>
     <a id="roomsNav" class="nav-btn" href="/call-rooms" title="Open voice and video rooms"><span>◉</span><b>Call rooms</b></a>
    <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
+   <button id="safetyNav" class="nav-btn" title="Safety and account settings"><span>盾</span><b>Safety & account</b></button>
    <button id="logout" class="nav-btn" title="Sign out"><span>↗</span><b>Sign out</b></button>
   </div>
   <p class="sidebar-caption">A LITTLE SPACE, JUST FOR YOUR PEOPLE.</p>
@@ -90,7 +92,7 @@
   <section id="chat" class="chat hidden">
    <div class="friend-head">
     <div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div>
-    <div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label" aria-label="Change friendship label">✎</button><button class="icon-btn" id="peerCopyCode" title="Copy friend's code" aria-label="Copy friend's code">▢</button></div>
+    <div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label" aria-label="Change friendship label">✎</button><button class="icon-btn" id="peerCopyCode" title="Copy friend's code" aria-label="Copy friend's code">▢</button><button class="ghost small" id="reportPeer" type="button">Report</button><button class="ghost small" id="blockPeer" type="button">Block</button></div>
    </div>
    <div class="chat-starters" aria-label="Quick message ideas"><span>START WITH</span><button type="button" data-quick-message="Hey! How's your day going?">A little hello</button><button type="button" data-quick-message="Something reminded me of you today.">Thought of you</button><button type="button" data-quick-message="What's one good thing that happened today?">One good thing</button></div>
    <div id="messages" class="messages" aria-live="polite" aria-relevant="additions text"></div>
@@ -168,6 +170,42 @@
 </main>
 <div id="themeModal" class="modal hidden"><div class="modal-card theme-modal"><button class="modal-close" id="themeClose">×</button><p class="eyebrow">MAKE PINGLET YOURS</p><h2>Choose your world</h2><p class="muted">Pick a look for your app. Your choice is saved on this device.</p><div id="themeGrid" class="theme-grid"><button class="theme-option" data-theme-choice="galaxy"><span class="theme-swatch galaxy-swatch">✦</span><b>Galaxy</b><small>Cosmic purple</small></button><button class="theme-option" data-theme-choice="aurora"><span class="theme-swatch aurora-swatch">✧</span><b>Aurora</b><small>Northern lights</small></button><button class="theme-option" data-theme-choice="nature"><span class="theme-swatch nature-swatch">🌿</span><b>Nature</b><small>Forest green</small></button><button class="theme-option" data-theme-choice="ocean"><span class="theme-swatch ocean-swatch">🌊</span><b>Ocean</b><small>Deep blue</small></button><button class="theme-option" data-theme-choice="sakura"><span class="theme-swatch sakura-swatch">🌸</span><b>Sakura</b><small>Soft pink</small></button><button class="theme-option" data-theme-choice="cute"><span class="theme-swatch cute-swatch">🐻</span><b>Cute</b><small>Pastel peach</small></button><button class="theme-option" data-theme-choice="pawprint"><span class="theme-swatch paw-swatch">🐾</span><b>Animal Paws</b><small>Warm and playful</small></button><button class="theme-option" data-theme-choice="midnight"><span class="theme-swatch midnight-swatch">☾</span><b>Midnight</b><small>Minimal dark</small></button></div><div class="custom-wallpaper"><b>Use your favourite character wallpaper</b><p class="muted">Upload an image saved on your device. It stays in this browser only.</p><label class="upload-wallpaper">Choose an image<input id="wallpaperUpload" type="file" accept="image/png,image/jpeg,image/webp"></label><button id="clearWallpaper" class="ghost">Remove custom wallpaper</button></div></div></div>
 <div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Send friend request →</button></form><div id="qrShareContent" class="qr-share hidden"></div><p id="modalError" class="error"></p></div></div>
+<div id="termsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="termsModalTitle">
+ <div class="modal-card">
+  <p class="eyebrow">ONE QUICK CHECK</p><h2 id="termsModalTitle">Terms and privacy</h2>
+  <p class="muted">Before using Pinglet, please review the Terms of Use and Privacy Policy.</p>
+  <p><a href="/terms.html" target="_blank" rel="noopener">Read Terms of Use</a> · <a href="/privacy.html" target="_blank" rel="noopener">Read Privacy Policy</a> · <a href="/child-safety.html" target="_blank" rel="noopener">Child Safety Standards</a></p>
+  <form id="termsForm"><label class="terms-consent"><input id="termsExistingAccepted" type="checkbox" required><span>I have read and agree to the Terms of Use and Privacy Policy.</span></label><button class="primary wide" type="submit">Continue to Pinglet</button></form>
+ </div>
+</div>
+<div id="reportModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+ <div class="modal-card">
+  <button class="modal-close" id="reportClose" type="button" aria-label="Close report">×</button>
+  <p class="eyebrow">HELP KEEP PINGLET SAFE</p><h2 id="reportTitle">Report this account</h2>
+  <p class="muted" id="reportDescription">Reports are stored for review by the service's moderation team. Include only the information needed to explain the concern.</p>
+  <form id="reportForm">
+   <label>Reason<select id="reportCategory" required><option value="">Choose a reason</option><option value="harassment">Harassment or bullying</option><option value="sexual_exploitation">Sexual exploitation, grooming or child safety concern</option><option value="threats">Threats or dangerous behaviour</option><option value="spam">Spam or scams</option><option value="impersonation">Impersonation</option><option value="other">Something else</option></select></label>
+   <label>What happened?<textarea id="reportDetails" rows="4" maxlength="3000" required placeholder="Describe the concern. For a message report, relevant message text is added here so the review team can understand the report."></textarea></label>
+   <p class="hint">Do not include passwords, payment details, or unrelated personal information.</p>
+   <button class="primary wide" id="submitReport" type="submit">Submit report</button><p class="error" id="reportError" role="alert"></p>
+  </form>
+ </div>
+</div>
+<div id="safetyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="safetyTitle">
+ <div class="modal-card">
+  <button class="modal-close" id="safetyClose" type="button" aria-label="Close safety settings">×</button>
+  <p class="eyebrow">YOUR CONTROL</p><h2 id="safetyTitle">Safety & account</h2>
+  <h3>Blocked accounts</h3><div id="blockedList"><p class="muted">Loading…</p></div>
+  <div class="divider"></div>
+  <h3>Delete your account</h3><p class="muted">This permanently removes your account, friendships, friend requests and stored messages. This cannot be undone. The same deletion option is also available outside the app.</p>
+  <form id="deleteAccountForm">
+   <label>Current password<input id="deletePassword" type="password" maxlength="128" autocomplete="current-password" required></label>
+   <label>Type DELETE to confirm<input id="deleteConfirmText" type="text" autocomplete="off" required></label>
+   <button class="danger wide" id="deleteAccountButton" type="submit">Permanently delete account</button><p class="error" id="deleteAccountError" role="alert"></p>
+  </form>
+  <p class="hint"><a href="/delete-account.html" target="_blank" rel="noopener">Open the external account deletion page</a> · <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a></p>
+ </div>
+</div>
 <div id="scannerModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scannerTitle">
  <div class="scanner-card">
   <div class="scanner-header"><div><p class="eyebrow">FIND YOUR PEOPLE</p><h2 id="scannerTitle">Scan a Pinglet QR</h2><p class="muted">Point your camera at a friend's invite code.</p></div><button class="modal-close" id="scannerClose" aria-label="Close scanner">×</button></div>
