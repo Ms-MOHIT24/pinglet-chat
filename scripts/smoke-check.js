@@ -55,6 +55,13 @@ check("Voice clip and message request sizes are bounded",
 check("Call room and RPS views have hidden-state styling",
   css.includes(".call-rooms.hidden{display:none!important}") &&
   css.includes(".games"));
+check("Chat drafts stay with their friend and empty messages cannot be sent",
+  app.includes("const messageDrafts = new Map()") &&
+  app.includes("messageDrafts.set(previousPeerId, previousDraft)") &&
+  app.includes("messageDrafts.get(friend.id)") &&
+  app.includes("messageSending = true") &&
+  app.includes("updateComposerState()") &&
+  html.includes('title="Write a message to enable sending" disabled'));
 check("Read-only API requests retry transient wake-up errors",
   app.includes("const canRetry = method === \"GET\"") &&
   app.includes("[502, 503, 504]") &&
@@ -67,6 +74,6 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v11"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v12"/.test(sw));
 
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
