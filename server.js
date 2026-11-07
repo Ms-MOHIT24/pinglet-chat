@@ -17,14 +17,32 @@ if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const app = express();
 app.set("trust proxy", 1);
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: false } });
+const io = new Server(server, { cors: { origin: capacitorOrigins } });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
 const PORT = process.env.PORT || 3000;
 
 app.disable("x-powered-by");
+const capacitorOrigins = [
+  "capacitor://localhost",
+  "ionic://localhost",
+  "https://localhost",
+  "http://localhost",
+  "https://pinglet-chat-live.onrender.com"
+];
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && capacitorOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Requested-With");
+  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
 app.use(helmet({ contentSecurityPolicy: { directives: {
-  defaultSrc: ["'self'"], scriptSrc: ["'self'", "https://cdn.jsdelivr.net"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
-  connectSrc: ["'self'", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
+  defaultSrc: ["'self'"], scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://pinglet-chat-live.onrender.com"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
+  connectSrc: ["'self'", "https://pinglet-chat-live.onrender.com", "wss://pinglet-chat-live.onrender.com", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
   objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"]
 } } }));
 app.use(express.json({ limit: "80kb" }));
@@ -70,7 +88,7 @@ async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS blocked_users_blocked_idx ON blocked_users(blocked_id);
     CREATE TABLE IF NOT EXISTS reports (
       id UUID PRIMARY KEY,
-      reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      reporter_id UUID REFERENCES users(id) ON DELETE SET NULL,
       reported_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
       category VARCHAR(32) NOT NULL CHECK (category IN ('harassment','sexual_exploitation','threats','spam','impersonation','other')),
       details TEXT NOT NULL,
@@ -287,6 +305,7 @@ app.post("/api/users/:id/block", auth, lookupLimiter, async (req, res) => {
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
   removeBlockedPairFromCalls(req.user.id, blockedId);
+  removeBlockedPairFromSnakeGames(req.user.id, blockedId);
   io.to(blockedId).emit("blocked", { by: req.user.id });
   res.json({ blocked: true });
 });
@@ -350,6 +369,17 @@ const snakeRooms = new Map();
 const snakeWidth = 24, snakeHeight = 16, snakeTickMs = 150;
 const opposite = { up: "down", down: "up", left: "right", right: "left" };
 function snakeRoomKey(a,b) { return [a,b].sort().join(":"); }
+function removeBlockedPairFromSnakeGames(firstUserId, secondUserId) {
+  for (const [key, game] of snakeRooms) {
+    if (!game.ids.includes(firstUserId) || !game.ids.includes(secondUserId)) continue;
+    if (game.timer) clearInterval(game.timer);
+    game.timer = null;
+    game.status = "finished";
+    game.winner = null;
+    io.to(key).emit("snake:error", { message: "This game ended because one player blocked the other." });
+    snakeRooms.delete(key);
+  }
+}
 function newSnakeGame(roomKey, ids) {
   return {
     key: roomKey, ids: [...ids], sockets: new Map(), snakes: [
