@@ -110,8 +110,16 @@ function toast(message) {
   node.textContent = message; node.classList.add("show");
   clearTimeout(toast.timer); toast.timer = setTimeout(() => node.classList.remove("show"), 3200);
 }
+function setConnectionStatus(label, connected) {
+  const node = $("#connectionStatus");
+  if (!node) return;
+  node.classList.toggle("is-connected", !!connected);
+  node.classList.toggle("is-offline", !connected);
+  node.innerHTML = '<i></i><span>' + escapeHtml(label) + '</span>';
+}
 function show(view) {
   ["welcome", "chat", "games"].forEach(id => $("#" + id).classList.toggle("hidden", id !== view));
+  document.body.dataset.view = view;
   if (view === "games") drawSnake();
 }
 function setAuthTab(next) {
@@ -173,8 +181,15 @@ async function boot() {
     });
     socket.on("friend-request", async () => { await loadRequests(); toast("You have a new friend request."); });
     socket.on("friendship", async () => { await loadFriends(); await loadRequests(); toast("A new friend was added to your circle."); });
-    socket.on("connect_error", () => { $("#contextEyebrow").textContent = "RECONNECTING"; });
-    socket.on("connect", () => { if (peer) $("#contextEyebrow").textContent = "YOUR CONVERSATION"; });
+    socket.on("connect_error", () => {
+      $("#contextEyebrow").textContent = "RECONNECTING";
+      setConnectionStatus("Reconnecting", false);
+    });
+    socket.on("connect", () => {
+      if (peer) $("#contextEyebrow").textContent = "YOUR CONVERSATION";
+      setConnectionStatus("Connected", true);
+    });
+    socket.on("disconnect", () => setConnectionStatus("Offline", false));
     socket.on("snake:invite", payload => {
       if (payload.fromId === me.id) return;
       pendingSnakeInvite = payload.fromId;
@@ -236,16 +251,29 @@ async function loadRequests() {
 }
 function renderFriends() {
   const list = $("#friends");
-  list.innerHTML = "";
+  const query = ($("#friendSearch")?.value || "").trim().toLowerCase();
+  list.replaceChildren();
   if (!friends.length) {
     list.innerHTML = '<p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p>';
     return;
   }
-  friends.forEach(friend => {
+  const visibleFriends = friends.filter(friend =>
+    friend.name.toLowerCase().includes(query) || friend.code.toLowerCase().includes(query) ||
+    (friend.label || "").toLowerCase().includes(query)
+  );
+  if (!visibleFriends.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty search-empty";
+    empty.textContent = "No friends match “" + query + "”.";
+    list.appendChild(empty);
+    return;
+  }
+  visibleFriends.forEach(friend => {
     const button = document.createElement("button");
     button.className = "friend" + (peer && peer.id === friend.id ? " active" : "");
     button.title = friend.name;
     button.setAttribute("aria-label", "Open chat with " + friend.name);
+    button.setAttribute("aria-current", peer && peer.id === friend.id ? "page" : "false");
     button.innerHTML = '<span class="avatar">' + escapeHtml(friend.name.charAt(0).toUpperCase()) +
       '</span><span><b>' + escapeHtml(friend.name) + '</b><small>' + escapeHtml(friend.code) +
       '</small></span><span class="tag">' + escapeHtml(friend.label || "Friend") + '</span>';
@@ -441,6 +469,9 @@ $("#modalForm").addEventListener("submit", async event => {
     }
   } catch (error) { $("#modalError").textContent = error.message; }
 });
+$("#friendSearch").addEventListener("input", renderFriends);
+$("#topAddFriend").addEventListener("click", showAddFriendModal);
+$("#welcomeShare").addEventListener("click", showQrModal);
 $("#requestsNav").addEventListener("click", () => {
   const requests = $("#requests");
   const opened = requests.classList.toggle("mobile-open");
@@ -450,6 +481,8 @@ $("#gamesNav").addEventListener("click", () => {
   $("#requests").classList.remove("mobile-open");
   show("games"); $("#contextEyebrow").textContent = "A LITTLE BREAK"; $("#contextTitle").textContent = "Play something.";
 });
+$("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
+
 $("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
 
 /* Rock, Paper, Scissors */
