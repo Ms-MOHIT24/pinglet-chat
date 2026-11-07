@@ -1,8 +1,8 @@
 {
   "name": "pinglet-chat",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
-  "description": "Pinglet social chat with QR invites, animated games, push-to-talk voice messages and private voice/video rooms",
+  "description": "Pinglet social chat with QR invites, animated games, encrypted push-to-talk voice messages and private voice/video rooms",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
