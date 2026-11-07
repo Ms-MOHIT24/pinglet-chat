@@ -412,7 +412,6 @@ $("#welcomeAdd").addEventListener("click", showAddFriendModal);
 $("#shareQr").addEventListener("click", showQrModal);
 $("#modalClose").addEventListener("click", () => $("#modal").classList.add("hidden"));
 $("#modal").addEventListener("click", event => { if (event.target.id === "modal") $("#modal").classList.add("hidden"); });
-$("#themeModal").addEventListener("click", event => { if (event.target.id === "themeModal") $("#themeModal").classList.add("hidden"); });
 document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
     $("#modal").classList.add("hidden");
