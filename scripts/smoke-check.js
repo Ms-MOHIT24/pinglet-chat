@@ -10,6 +10,7 @@ const app = read("public/app.js");
 const server = read("server.js");
 const css = read("public/style.css");
 const sw = read("public/sw.js");
+const packageJson = JSON.parse(read("package.json"));
 
 function check(label, condition) {
   assert.ok(condition, label);
@@ -74,7 +75,7 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v13"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v14"/.test(sw));
 
 
 check("Terms acceptance is required for account creation and social writes",
@@ -114,6 +115,16 @@ check("Policy and child-safety pages are present and accessible",
   html.includes('href="/terms.html"') &&
   html.includes('href="/privacy.html"'));
 const capacitor = JSON.parse(read("capacitor.config.json"));
+check("Socket.IO and QR scanner runtimes are bundled by npm install",
+  packageJson.scripts.postinstall === "node scripts/copy-vendor.js" &&
+  packageJson.dependencies.jsqr === "^1.4.0" &&
+  fs.existsSync(path.join(root, "scripts/copy-vendor.js")) &&
+  html.includes('src="/vendor/socket.io.js" defer') &&
+  html.includes('src="/vendor/jsQR.js" defer') &&
+  html.includes('src="/app.js" defer') &&
+  !html.includes("cdn.jsdelivr.net/npm/jsqr") &&
+  !html.includes("onrender.com/socket.io/socket.io.js"));
+
 check("Android ships its own web UI instead of remote-loading the website",
   (!capacitor.server || !capacitor.server.url) &&
   app.includes("const API_ORIGIN = isNativeShell ?") &&
