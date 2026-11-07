@@ -1,6 +1,9 @@
 const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
+const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
+  !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
 let messageSending = false;
 const messageDrafts = new Map();
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
@@ -27,7 +30,7 @@ async function api(path, options = {}) {
 
   for (let attempt = 0; attempt <= (canRetry ? retryDelays.length : 0); attempt++) {
     try {
-      const response = await fetch("/api" + path, {
+      const response = await fetch(API_ORIGIN + "/api" + path, {
         ...options,
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(options.headers || {}) }
       });
@@ -244,7 +247,7 @@ async function boot() {
     $("#myCode").textContent = me.code;
     $("#myAvatar").textContent = me.name.charAt(0).toUpperCase();
     if (socket) socket.disconnect();
-    socket = io({ auth: { token } });
+    socket = io(API_ORIGIN || location.origin, { auth: { token } });
     socket.on("message", async message => {
       if (peer && (message.sender === peer.id || message.recipient === peer.id)) await loadMessages();
     });
