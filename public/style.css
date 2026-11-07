@@ -1137,3 +1137,156 @@ body[data-view="rooms"] #roomsNav>span{color:var(--accent)}
 .rps-launch-link{font-size:11px;min-height:42px;padding:11px 16px;box-shadow:0 10px 25px rgba(185,163,255,.15)}
 .rps-launch-link:hover,.top-games:hover{filter:brightness(1.08);transform:translateY(-1px)}
 @media(max-width:700px){.top-games{display:none}.rps-launch-link{width:100%}}
+
+
+/* Pinglet motion system — shared by the web app and Capacitor Android shell */
+:root{--motion-fast:160ms;--motion-normal:280ms;--motion-slow:620ms}
+html{scroll-behavior:smooth}
+body{isolation:isolate}
+body:before{
+  content:"";position:fixed;inset:-18%;z-index:-1;pointer-events:none;opacity:.48;
+  background:
+    radial-gradient(ellipse at 13% 18%,rgba(185,163,255,.16),transparent 32%),
+    radial-gradient(ellipse at 88% 72%,rgba(124,228,220,.12),transparent 30%),
+    radial-gradient(ellipse at 55% 0%,rgba(217,251,131,.055),transparent 27%);
+  transform:translate3d(0,0,0);animation:pinglet-ambient-drift 18s ease-in-out infinite alternate
+}
+#app{position:relative;z-index:1}
+@keyframes pinglet-ambient-drift{
+  0%{transform:translate3d(-1.3%,0,0) scale(1)}
+  50%{transform:translate3d(1.2%,-1.1%,0) scale(1.025)}
+  100%{transform:translate3d(-.5%,1.2%,0) scale(1.04)}
+}
+@keyframes pinglet-shell-arrive{
+  from{opacity:0;transform:translateY(15px) scale(.992);filter:blur(3px)}
+  to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+}
+@keyframes pinglet-soft-rise{
+  from{opacity:0;transform:translateY(16px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes pinglet-soft-pop{
+  0%{opacity:0;transform:scale(.92)}
+  70%{opacity:1;transform:scale(1.015)}
+  100%{opacity:1;transform:scale(1)}
+}
+@keyframes pinglet-message-in{
+  from{opacity:0;transform:translateY(10px) scale(.985)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes pinglet-gentle-float{
+  0%,100%{transform:translateY(0) rotate(0)}
+  50%{transform:translateY(-7px) rotate(1deg)}
+}
+@keyframes pinglet-orbit-spin{to{transform:rotate(360deg)}}
+@keyframes pinglet-glow-breathe{
+  0%,100%{box-shadow:0 0 0 0 rgba(185,163,255,0),0 14px 36px rgba(0,0,0,.12)}
+  50%{box-shadow:0 0 0 5px rgba(185,163,255,.035),0 18px 42px rgba(0,0,0,.2)}
+}
+@keyframes pinglet-highlight-sweep{
+  0%{transform:translateX(-150%) skewX(-16deg);opacity:0}
+  20%{opacity:.3}
+  65%,100%{transform:translateX(250%) skewX(-16deg);opacity:0}
+}
+#auth{animation:pinglet-shell-arrive .72s cubic-bezier(.2,.75,.25,1) both}
+.auth-art-mark{animation:pinglet-soft-pop .8s .18s both,pinglet-gentle-float 4.6s 1s ease-in-out infinite}
+.auth-orbit{transform-origin:center;animation:pinglet-orbit-spin 24s linear infinite}
+.orbit-two{animation-duration:32s;animation-direction:reverse}
+.orbit-three{animation-duration:40s}
+.brand-icon{transition:transform var(--motion-normal) cubic-bezier(.2,.8,.2,1),box-shadow var(--motion-normal)}
+.brand:hover .brand-icon{transform:rotate(18deg) scale(1.08);box-shadow:0 0 0 5px rgba(199,243,107,.1)}
+.workspace:not(.hidden){animation:pinglet-shell-arrive .58s cubic-bezier(.2,.75,.25,1) both}
+.workspace:not(.hidden) .sidebar{animation:pinglet-soft-rise .55s .08s both}
+.workspace:not(.hidden) .topbar{animation:pinglet-soft-rise .5s .12s both}
+.nav-btn,.friend,.icon-btn,.plus,.ghost,.primary,.send,.call-control,.call-reactions button,.choices button{
+  transition:transform var(--motion-fast) ease,background var(--motion-fast) ease,border-color var(--motion-fast) ease,box-shadow var(--motion-fast) ease,filter var(--motion-fast) ease
+}
+.nav-btn{position:relative;overflow:hidden}
+.nav-btn:after{
+  content:"";position:absolute;left:9px;top:50%;width:3px;height:0;border-radius:5px;
+  background:var(--accent);transform:translateY(-50%);transition:height var(--motion-fast) ease
+}
+.nav-btn.active:after{height:48%}
+.nav-btn:hover{transform:translateX(3px)}
+.primary:hover,.send:hover,.ghost:hover,.call-control:hover,.choices button:hover,.plus:hover,.icon-btn:hover{
+  transform:translateY(-2px);filter:brightness(1.07)
+}
+.primary:active,.send:active,.ghost:active,.call-control:active,.choices button:active,.nav-btn:active{
+  transform:scale(.97)
+}
+.primary{position:relative;overflow:hidden}
+.primary:before{
+  content:"";position:absolute;top:-25%;left:0;width:32%;height:150%;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);
+  transform:translateX(-150%) skewX(-16deg)
+}
+.primary:hover:before{animation:pinglet-highlight-sweep .85s ease}
+.friend{animation:pinglet-soft-rise .38s both}
+.friend:nth-child(2){animation-delay:35ms}
+.friend:nth-child(3){animation-delay:70ms}
+.friend:nth-child(4){animation-delay:105ms}
+.friend:nth-child(5){animation-delay:140ms}
+.friend:nth-child(6){animation-delay:175ms}
+.friend:hover{transform:translateX(3px)}
+.friend .avatar{transition:transform var(--motion-normal) cubic-bezier(.2,.8,.2,1),box-shadow var(--motion-normal)}
+.friend:hover .avatar{transform:rotate(-7deg) scale(1.08);box-shadow:0 0 0 4px rgba(185,163,255,.08)}
+.request-item{animation:pinglet-soft-rise .35s both}
+.request-item:nth-child(2){animation-delay:45ms}
+.request-item:nth-child(3){animation-delay:90ms}
+.welcome-copy>*{animation:pinglet-soft-rise .56s both}
+.welcome-copy>.eyebrow{animation-delay:70ms}
+.welcome-copy>h2{animation-delay:130ms}
+.welcome-copy>p:not(.eyebrow){animation-delay:190ms}
+.welcome-copy>.welcome-actions{animation-delay:250ms}
+.welcome-copy>.welcome-trust{animation-delay:310ms}
+.welcome-copy>.welcome-stats{animation-delay:370ms}
+.welcome-copy>.spark-card{animation-delay:430ms}
+.welcome-visual{animation:pinglet-gentle-float 6.5s ease-in-out infinite}
+.visual-orbit{transform-origin:center;animation:pinglet-orbit-spin 30s linear infinite}
+.orbit-b{animation-direction:reverse;animation-duration:38s}
+.visual-core{animation:pinglet-glow-breathe 4s ease-in-out infinite}
+.visual-note{transition:transform var(--motion-normal),box-shadow var(--motion-normal)}
+.visual-note:hover{transform:translateY(-4px) scale(1.035);box-shadow:0 14px 30px rgba(0,0,0,.22)}
+.welcome-stat{transition:transform var(--motion-fast),border-color var(--motion-fast),background var(--motion-fast)}
+.welcome-stat:hover{transform:translateY(-3px);border-color:rgba(185,163,255,.3);background:rgba(185,163,255,.055)}
+.spark-next{transition:transform var(--motion-normal),background var(--motion-fast)}
+.spark-next:hover{transform:rotate(90deg);background:rgba(185,163,255,.13)}
+.view-enter{animation:pinglet-shell-arrive .42s cubic-bezier(.2,.75,.25,1) both}
+.bubble{animation:pinglet-message-in .28s cubic-bezier(.2,.75,.25,1) both}
+.bubble.mine{transform-origin:bottom right}
+.bubble.theirs{transform-origin:bottom left}
+.chat-starters button{transition:transform var(--motion-fast),background var(--motion-fast),border-color var(--motion-fast)}
+.chat-starters button:hover{transform:translateY(-2px);border-color:rgba(185,163,255,.34)}
+.composer:focus-within{border-color:rgba(185,163,255,.3);box-shadow:0 -8px 30px rgba(185,163,255,.045)}
+.send{transition:transform var(--motion-fast),filter var(--motion-fast),box-shadow var(--motion-fast)}
+.send:hover{box-shadow:0 8px 22px rgba(199,243,107,.16)}
+.games>.game-card{animation:pinglet-soft-rise .55s both}
+.games>.game-card:nth-child(2){animation-delay:110ms}
+.rps-card{animation:pinglet-glow-breathe 5s ease-in-out infinite}
+.rps-arena-glow{animation:pinglet-glow-breathe 4.5s ease-in-out infinite}
+.call-hero-mark{animation:pinglet-gentle-float 4.8s ease-in-out infinite}
+.call-create-card{transition:transform var(--motion-normal),border-color var(--motion-normal),box-shadow var(--motion-normal)}
+.call-create-card:hover{transform:translateY(-5px);border-color:rgba(124,228,220,.26);box-shadow:0 22px 48px rgba(0,0,0,.23)}
+.call-tile{animation:pinglet-soft-pop .35s both}
+.call-reactions button:active{transform:scale(.88)}
+.modal-card{animation:pinglet-soft-pop .24s cubic-bezier(.2,.8,.2,1) both}
+.toast.show{animation:pinglet-soft-pop .22s both}
+.scanner-card{animation:pinglet-soft-pop .28s both}
+@media(hover:none){
+  .welcome-stat:hover,.call-create-card:hover,.visual-note:hover{transform:none}
+  .primary:active,.ghost:active,.nav-btn:active,.choices button:active{transform:scale(.97)}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  body:before,#auth .auth-art-mark,.auth-orbit,.workspace:not(.hidden),
+  .workspace:not(.hidden) .sidebar,.workspace:not(.hidden) .topbar,
+  .friend,.request-item,.welcome-copy>*,.welcome-visual,.visual-orbit,.visual-core,
+  .view-enter,.bubble,.games>.game-card,.rps-card,.rps-arena-glow,
+  .call-create-card,.call-tile,.modal-card,.toast.show,.scanner-card,
+  .primary:hover:before{animation:none!important}
+  .nav-btn,.friend,.icon-btn,.plus,.ghost,.primary,.send,.call-control,
+  .call-reactions button,.choices button,.friend .avatar,.welcome-stat,
+  .spark-next,.visual-note,.chat-starters button,.call-create-card{
+    transition:none!important
+  }
+}
