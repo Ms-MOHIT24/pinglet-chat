@@ -985,3 +985,118 @@ label{font-size:11px;color:#d4d8e7;font-weight:700}
 @media(prefers-reduced-motion:reduce){
   .view-enter,.rps-live i,.rps-hand,.rps-arena.rps-pulse .arena-vs,.rps-result,.rps-confetti,.game-card{animation:none!important;transition:none!important}
 }
+
+
+/* Voice + video hangout rooms */
+.call-rooms{
+  flex:1;min-height:0;overflow:auto;padding:clamp(16px,3vw,34px);
+  display:flex;flex-direction:column;gap:20px;
+  background:radial-gradient(ellipse at 78% 4%,rgba(124,228,220,.08),transparent 38%)
+}
+.call-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:1000px;width:100%;margin:0 auto}
+.call-hero .eyebrow{margin:0 0 7px;color:#8de7e0;font-size:8px;letter-spacing:1.8px}
+.call-hero h2{font-size:clamp(24px,3vw,34px);letter-spacing:-1.2px;margin:0}
+.call-hero .muted{max-width:580px;font-size:11px;line-height:1.7;margin:7px 0 0;color:#a8b2c9}
+.call-hero-mark{width:62px;height:62px;flex:none;display:grid;place-items:center;border:1px solid rgba(124,228,220,.2);border-radius:20px;background:linear-gradient(145deg,rgba(124,228,220,.14),rgba(185,163,255,.13));color:#baf7ef;font-size:30px;box-shadow:0 12px 35px rgba(0,0,0,.18);animation:call-mark-float 3.5s ease-in-out infinite}
+@keyframes call-mark-float{50%{transform:translateY(-5px) rotate(4deg)}}
+.call-landing,.call-live{width:100%;max-width:1000px;margin:0 auto}
+.call-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.call-create-card,.call-join-card{
+  position:relative;overflow:hidden;border:1px solid rgba(185,198,235,.14);
+  border-radius:19px;padding:21px;background:linear-gradient(150deg,rgba(31,40,60,.9),rgba(17,24,39,.95));
+  box-shadow:0 14px 38px rgba(0,0,0,.14)
+}
+.call-create-card:after{content:"";position:absolute;width:150px;height:150px;right:-70px;top:-85px;border-radius:50%;background:rgba(185,163,255,.11);filter:blur(2px);pointer-events:none}
+.call-create-card.voice-create:after{background:rgba(124,228,220,.13)}
+.call-create-icon{width:43px;height:43px;display:grid;place-items:center;border-radius:14px;background:rgba(185,163,255,.13);color:#d6caff;font-size:23px}
+.voice-create .call-create-icon{background:rgba(124,228,220,.11);color:#aaf7ef}
+.call-create-card .eyebrow,.call-join-card .eyebrow{margin:13px 0 5px;font-size:7px;letter-spacing:1.6px;color:#b9a3ff}
+.voice-create .eyebrow{color:#8de7e0}
+.call-create-card h3,.call-join-card h3,.call-live-heading h3{font-size:19px;letter-spacing:-.6px;margin:0;color:#f0f2fa}
+.call-create-card p.muted,.call-join-card p.muted{font-size:9px;line-height:1.7;margin:6px 0 15px;color:#9ba7c0}
+.call-create-card button{width:100%;font-size:10px;padding:11px 13px;background:linear-gradient(110deg,#d9fb83,#b9edaa)}
+.voice-create button{background:linear-gradient(110deg,#9bf1e8,#b8c9ff)}
+.call-join-card{display:grid;grid-template-columns:minmax(0,1fr) 160px auto;align-items:end;gap:14px;margin-top:14px;padding:18px 20px}
+.call-join-card>div{align-self:center}
+.call-join-card .eyebrow{margin:0 0 5px}
+.call-join-card h3{font-size:16px}
+.call-join-card p.muted{margin:4px 0 0}
+.call-code-label{display:block;margin:0}
+.call-code-label span{display:block;font-size:7px;letter-spacing:1.4px;color:#aeb9d0;font-weight:900}
+.call-code-label input{
+  width:100%;margin:6px 0 0;padding:10px 12px;text-align:center;
+  font-size:20px;font-weight:900;letter-spacing:7px;font-variant-numeric:tabular-nums;
+  border:1px solid rgba(185,163,255,.25);border-radius:12px;background:#0d1422
+}
+.call-join-card button{height:43px;padding:0 18px;font-size:10px;border-color:rgba(124,228,220,.28);color:#c7fff5;background:rgba(124,228,220,.08);white-space:nowrap}
+.call-footnote,.call-privacy-note{font-size:8px;line-height:1.7;color:#75819b;text-align:center;margin:10px auto 0}
+.call-live{padding:18px;border:1px solid rgba(185,198,235,.14);border-radius:21px;background:linear-gradient(155deg,rgba(25,34,52,.88),rgba(13,19,32,.96));box-shadow:0 20px 55px rgba(0,0,0,.2)}
+.call-live-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:16px}
+.call-live-heading .eyebrow{margin:0 0 5px;color:#8de7e0;font-size:7px;letter-spacing:1.6px}
+.call-live-heading h3{font-size:18px}
+.call-status{font-size:9px;color:#9aa8c2;margin:4px 0 0}
+.call-code-share{flex:none;display:grid;grid-template-columns:auto auto;align-items:center;gap:4px 9px;padding:9px 12px;border:1px solid rgba(124,228,220,.19);border-radius:13px;background:rgba(124,228,220,.055)}
+.call-code-share span{font-size:6px;letter-spacing:1.2px;color:#8ba6b2;font-weight:900}
+.call-code-share strong{grid-column:1;grid-row:2;font-size:23px;line-height:1.2;letter-spacing:5px;color:#d5fff8;font-variant-numeric:tabular-nums}
+.call-code-share button{grid-column:2;grid-row:1/span 2;font-size:8px;padding:7px 9px;border-color:rgba(124,228,220,.22);color:#c7fff5}
+.call-grid{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;min-height:180px}
+.call-tile{position:relative;overflow:hidden;min-width:0;aspect-ratio:16/10;border:1px solid rgba(185,198,235,.16);border-radius:15px;background:radial-gradient(circle at 50% 30%,rgba(185,163,255,.12),transparent 45%),#0a1120;display:grid;place-items:center;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+.call-tile.is-local{border-color:rgba(217,251,131,.24)}
+.call-media-wrap{position:absolute;inset:0;display:grid;place-items:center}
+.call-media{width:100%;height:100%;object-fit:cover;background:#0a1120}
+.call-tile audio.call-media{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.call-avatar{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(28px,6vw,52px);font-weight:900;color:#dfd6ff;background:radial-gradient(circle,rgba(185,163,255,.14),transparent 55%)}
+.call-tile.has-video .call-avatar{opacity:0}
+.call-name{position:absolute;left:9px;bottom:9px;z-index:2;max-width:calc(100% - 18px);padding:6px 9px;border:1px solid rgba(255,255,255,.10);border-radius:8px;background:rgba(7,12,22,.72);backdrop-filter:blur(9px);font-size:8px;color:#f0f3fb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.call-tile.is-local:after{content:"YOU";position:absolute;right:9px;top:9px;padding:4px 7px;border-radius:6px;background:rgba(217,251,131,.15);color:#d9fb83;font-size:6px;letter-spacing:1px;font-weight:950}
+.call-reactions{display:flex;align-items:center;justify-content:center;gap:8px;margin:15px auto 10px}
+.call-reactions>span{font-size:8px;color:#8995ad;margin-right:4px}
+.call-reactions button{width:37px;height:35px;border:1px solid rgba(185,198,235,.15);border-radius:11px;background:rgba(255,255,255,.035);font-size:17px;transition:transform .16s,background .16s}
+.call-reactions button:hover{transform:translateY(-3px) scale(1.05);background:rgba(185,163,255,.13)}
+.call-controls{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap}
+.call-control{min-width:112px;padding:11px 15px;border:1px solid rgba(185,198,235,.17);border-radius:12px;background:rgba(255,255,255,.045);color:#dce3f4;font-size:9px;font-weight:850;transition:transform .16s,border-color .16s,background .16s}
+.call-control.active{border-color:rgba(124,228,220,.3);background:rgba(124,228,220,.08);color:#c3fff6}
+.call-control.leave{border-color:rgba(255,159,200,.27);background:rgba(255,159,200,.08);color:#ffc1d7}
+.call-control:disabled,.call-create-card button:disabled,.call-join-card button:disabled{opacity:.5;cursor:wait}
+.call-privacy-note{max-width:700px}
+.call-reaction-burst{position:absolute;z-index:5;left:50%;top:35%;font-size:clamp(38px,8vw,70px);pointer-events:none;filter:drop-shadow(0 8px 16px rgba(0,0,0,.35));animation:call-reaction-float 1.45s cubic-bezier(.17,.7,.3,1) both}
+@keyframes call-reaction-float{0%{opacity:0;transform:translate(-50%,25px) scale(.45) rotate(-12deg)}18%{opacity:1;transform:translate(-50%,0) scale(1.15) rotate(5deg)}75%{opacity:1;transform:translate(-50%,-28px) scale(1)}100%{opacity:0;transform:translate(-50%,-58px) scale(.9)}}
+body[data-view="rooms"] #roomsNav{color:var(--accent);background:linear-gradient(110deg,rgba(217,251,131,.12),rgba(185,163,255,.08));border-color:rgba(217,251,131,.18)}
+body[data-view="rooms"] #roomsNav>span{color:var(--accent)}
+#roomsNav{border:1px solid transparent}
+@media(max-width:700px){
+  .call-rooms{padding:14px 10px 22px;gap:14px}
+  .call-hero{gap:10px;padding:0 3px}
+  .call-hero h2{font-size:24px}
+  .call-hero .muted{font-size:9px;max-width:290px}
+  .call-hero-mark{width:45px;height:45px;border-radius:15px;font-size:22px}
+  .call-create-grid{gap:8px}
+  .call-create-card{padding:14px 11px;border-radius:15px}
+  .call-create-icon{width:34px;height:34px;font-size:18px;border-radius:11px}
+  .call-create-card .eyebrow{font-size:6px;margin:10px 0 4px}
+  .call-create-card h3{font-size:15px}
+  .call-create-card p.muted{font-size:8px;min-height:42px}
+  .call-create-card button{font-size:8px;padding:10px 7px}
+  .call-join-card{grid-template-columns:minmax(0,1fr) 112px;gap:8px;padding:14px}
+  .call-join-card>div{grid-column:1/-1}
+  .call-join-card h3{font-size:15px}
+  .call-code-label input{font-size:18px;letter-spacing:5px;padding:9px}
+  .call-join-card button{height:40px;padding:0 10px;font-size:9px}
+  .call-footnote{font-size:7px;padding:0 6px}
+  .call-live{padding:12px 9px;border-radius:16px}
+  .call-live-heading{align-items:flex-start;gap:8px}
+  .call-live-heading h3{font-size:15px}
+  .call-code-share{padding:7px 8px;gap:3px 6px}
+  .call-code-share strong{font-size:19px;letter-spacing:3px}
+  .call-code-share button{font-size:7px;padding:6px}
+  .call-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .call-tile{aspect-ratio:4/5;border-radius:11px}
+  .call-name{font-size:7px;left:6px;bottom:6px;padding:5px 6px}
+  .call-reactions{gap:5px;margin:12px auto}
+  .call-reactions button{width:33px;height:32px;font-size:15px}
+  .call-control{min-width:95px;padding:10px 11px;font-size:8px}
+  .call-privacy-note{font-size:7px}
+}
+@media(prefers-reduced-motion:reduce){
+  .call-hero-mark,.call-reaction-burst{animation:none!important;transition:none!important}
+}
