@@ -17,11 +17,6 @@ if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const app = express();
 app.set("trust proxy", 1);
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: capacitorOrigins } });
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
-const PORT = process.env.PORT || 3000;
-
-app.disable("x-powered-by");
 const capacitorOrigins = [
   "capacitor://localhost",
   "ionic://localhost",
@@ -29,6 +24,11 @@ const capacitorOrigins = [
   "http://localhost",
   "https://pinglet-chat-live.onrender.com"
 ];
+const io = new Server(server, { cors: { origin: capacitorOrigins } });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
+const PORT = process.env.PORT || 3000;
+
+app.disable("x-powered-by");
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && capacitorOrigins.includes(origin)) {
