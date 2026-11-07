@@ -76,4 +76,46 @@ check("Shared web and Android motion system",
 check("Service-worker cache version is current",
   /CACHE_NAME = "pinglet-shell-v12"/.test(sw));
 
+
+check("Terms acceptance is required for account creation and social writes",
+  server.includes("terms_accepted_at") &&
+  server.includes("req.body.termsAccepted !== true") &&
+  server.includes("async function termsRequired") &&
+  server.includes("auth, termsRequired") &&
+  server.includes("Please accept Pinglet's Terms first") &&
+  html.includes('id="termsAccepted"') &&
+  html.includes('id="termsModal"') &&
+  app.includes('api("/me/terms"'));
+check("Account deletion works in-app and on the public web",
+  server.includes('app.delete("/api/me"') &&
+  server.includes('DELETE FROM users WHERE id=$1') &&
+  html.includes('id="deleteAccountForm"') &&
+  html.includes('href="/delete-account.html"') &&
+  app.includes('api("/me", { method: "DELETE"') &&
+  fs.existsSync(path.join(root, "public/delete-account.html")) &&
+  fs.existsSync(path.join(root, "public/delete-account.js")));
+check("Report, block and unblock controls are wired to protected APIs",
+  server.includes("CREATE TABLE IF NOT EXISTS blocked_users") &&
+  server.includes('app.post("/api/users/:id/block"') &&
+  server.includes('app.delete("/api/users/:id/block"') &&
+  server.includes('app.post("/api/reports"') &&
+  server.includes('app.get("/api/moderation/reports"') &&
+  server.includes("timingSafeEqual") &&
+  html.includes('id="reportPeer"') &&
+  html.includes('id="blockPeer"') &&
+  html.includes('id="safetyNav"') &&
+  app.includes('api("/reports"') &&
+  app.includes('api("/blocks"'));
+check("Policy and child-safety pages are present and accessible",
+  fs.existsSync(path.join(root, "public/terms.html")) &&
+  fs.existsSync(path.join(root, "public/privacy.html")) &&
+  fs.existsSync(path.join(root, "public/child-safety.html")) &&
+  fs.existsSync(path.join(root, "public/delete-account.html")) &&
+  html.includes('href="/terms.html"') &&
+  html.includes('href="/privacy.html"'));
+check("Call rooms require a saved, non-blocked friendship",
+  server.includes('if (await areBlockedEither(userId, participant.userId) || !await areFriends(userId, participant.userId))') &&
+  server.includes("removeBlockedPairFromCalls") &&
+  server.includes("if (await areBlockedEither(sender.userId, recipient.userId)) return"));
+
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
