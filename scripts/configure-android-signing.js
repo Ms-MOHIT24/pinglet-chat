@@ -24,7 +24,7 @@ if (!/upload-key\.jks/.test(gradle)) {
 `;
   gradle = gradle.replace(/(\n\s*)buildTypes\s*\{/, "$1" + signing + "$1buildTypes {");
 }
-gradle = gradle.replace(/(release\s*\{)/, "$1\n            signingConfig signingConfigs.release");
+gradle = gradle.replace(/(buildTypes\s*\{[\s\S]*?\brelease\s*\{)/, "$1\n            signingConfig signingConfigs.release");
 gradle = gradle.replace(/versionCode\s+\d+/, "versionCode 10900");
 gradle = gradle.replace(/versionName\s+["'][^"']+["']/, 'versionName "1.9.0"');
 if (!/signingConfig\s+signingConfigs\.release/.test(gradle)) throw new Error("Release signing config was not attached.");
