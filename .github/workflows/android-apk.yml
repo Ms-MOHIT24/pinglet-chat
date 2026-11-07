@@ -1,4 +1,4 @@
-name: Build Pinglet Android APK
+name: Build Pinglet Android Preview
 
 on:
   push:
@@ -23,16 +23,32 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    env:
+      ANDROID_SIGNING_READY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pinglet_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pinglet_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Check JavaScript syntax
-        run: node --check server.js && node --check public/app.js
+        run: node --check server.js && node --check public/app.js && node --check scripts/smoke-check.js && node --check scripts/api-integration-check.js && node --check scripts/configure-android-signing.js
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
-
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -48,17 +64,73 @@ jobs:
       - name: Install app dependencies
         run: npm install
 
+      - name: API integration checks
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_test
+          DATABASE_SSL: disable
+          JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
+          REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
+        run: node scripts/api-integration-check.js
+
       - name: Generate Android project
         run: npx cap add android
 
-      - name: Sync Capacitor
+      - name: Sync bundled web assets
         run: npx cap sync android
 
-      - name: Build installable APK
+      - name: Verify Google Play target API
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_SDK="$(grep -RhoE 'targetSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' android --include='*.gradle' --include='*.gradle.kts' | head -n1 | grep -oE '[0-9]+$' || true)"
+          if [[ -z "$TARGET_SDK" ]]; then
+            echo "Could not determine Android targetSdkVersion from the generated project."
+            grep -Rni 'targetSdk' android --include='*.gradle' --include='*.gradle.kts' || true
+            exit 1
+          fi
+          echo "Generated Android target SDK: $TARGET_SDK"
+          if (( TARGET_SDK < 36 )); then
+            echo "Google Play new-app submissions require target API 36 or higher."
+            exit 1
+          fi
+
+      - name: Configure upload key for signed release
+        if: env.ANDROID_SIGNING_READY == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-key.jks
+          keytool -list -keystore android/app/upload-key.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          node scripts/configure-android-signing.js
+
+      - name: Build installable preview APK
         working-directory: android
         run: ./gradlew --no-daemon assembleDebug
 
-      - name: Publish APK release
+      - name: Build signed Play Store App Bundle
+        if: env.ANDROID_SIGNING_READY == 'true'
+        working-directory: android
+        run: ./gradlew --no-daemon bundleRelease
+
+      - name: Upload signed App Bundle artifact
+        if: env.ANDROID_SIGNING_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinglet-1.9.0-play-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Note missing Play upload signing key
+        if: env.ANDROID_SIGNING_READY != 'true'
+        run: echo "No Android upload signing secrets configured. Built a debug preview APK only; no Play-uploadable AAB was produced."
+
+      - name: Publish APK preview
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
