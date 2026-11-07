@@ -239,7 +239,11 @@ async function boot() {
   try {
     const data = await api("/me");
     me = data.user;
-    if (!me.termsAccepted) $("#termsModal").classList.remove("hidden");
+    if (!me.termsAccepted) {
+      $("#termsModal").classList.remove("hidden");
+      return;
+    }
+    $("#termsModal").classList.add("hidden");
     privateKey = privateKey || await readPrivateKey(me.id);
     if (!privateKey) throw new Error("Encryption key missing on this browser. Sign in on the browser where you created the account.");
     $("#auth").classList.add("hidden");
@@ -1111,7 +1115,7 @@ $("#termsForm").addEventListener("submit", async event => {
     await api("/me/terms", { method: "POST", body: JSON.stringify({ accepted: true }) });
     me.termsAccepted = true;
     $("#termsModal").classList.add("hidden");
-    if (socket && !socket.connected) socket.connect();
+    await boot();
     toast("Thanks. You're all set.");
   } catch (error) { toast(error.message); }
   finally { button.disabled = false; }
