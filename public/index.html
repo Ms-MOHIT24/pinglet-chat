@@ -2,53 +2,93 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#10131c"><title>Pinglet — your people, your space</title>
+<meta name="theme-color" content="#10131c"><meta name="description" content="Pinglet is a calmer little space for your people: private friend chats, QR invites and playful mini games."><meta name="color-scheme" content="dark"><meta property="og:title" content="Pinglet — your people, your space"><meta property="og:description" content="A calmer little space for your people."><title>Pinglet — your people, your space</title>
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="/icon.svg"><link rel="apple-touch-icon" href="/icon.svg"><link rel="stylesheet" href="/style.css"><script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 <main id="app">
 <section class="auth-card" id="auth">
-  <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
-  <p class="eyebrow">YOUR PEOPLE. YOUR SPACE.</p>
-  <h1>Good conversations<br><em>stay between you.</em></h1>
-  <p class="muted">A little place for your friends, shared jokes and everyday hellos.</p>
-  <div class="tabs"><button class="tab active" data-tab="create">Create account</button><button class="tab" data-tab="login">Sign in</button></div>
-  <form id="authForm">
-    <label id="nameWrap">Your name<input id="name" maxlength="24" placeholder="What should friends call you?" required></label>
-    <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="14" placeholder="Your 14-character code"></label>
-    <label>Password<input id="password" type="password" minlength="8" maxlength="128" placeholder="At least 8 characters" required></label>
-    <button class="primary wide" id="authSubmit">Create my space →</button>
-  </form>
-  <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError"></p>
+  <div class="auth-art" aria-hidden="true"><span class="auth-orbit orbit-one"></span><span class="auth-orbit orbit-two"></span><span class="auth-orbit orbit-three"></span><span class="auth-art-mark">✳</span><span class="auth-art-note note-one">a little hello</span><span class="auth-art-note note-two">your people, close by</span></div>
+  <div class="auth-content">
+    <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span><span class="brand-beta">YOUR LITTLE CORNER</span></div>
+    <p class="eyebrow">A PLACE FOR YOUR PEOPLE</p>
+    <h1>Make the little<br><em>moments count.</em></h1>
+    <p class="muted">A calmer corner for shared jokes, everyday hellos and the people who make them matter.</p>
+    <div class="tabs"><button class="tab active" data-tab="create">Create account</button><button class="tab" data-tab="login">Sign in</button></div>
+    <form id="authForm">
+      <label id="nameWrap">Your name<input id="name" maxlength="24" autocomplete="nickname" placeholder="What should friends call you?" required></label>
+      <label id="codeWrap" class="hidden">Your friend code<input id="code" autocomplete="username" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="14" placeholder="Your 14-character code"></label>
+      <label>Password<input id="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" placeholder="At least 8 characters" required></label>
+      <button class="primary wide" id="authSubmit">Create my space <span aria-hidden="true">↗</span></button>
+    </form>
+    <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError" role="alert"></p>
+    <p class="auth-footnote"><span class="auth-footnote-dot"></span> Small circles. Better conversations.</p>
+  </div>
 </section>
 <section id="workspace" class="workspace hidden">
  <aside class="sidebar">
-  <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
-  <div class="profile">
-    <div class="avatar" id="myAvatar">M</div>
-    <div class="profile-name"><b id="myName">You</b><small id="myCode">FRIEND CODE</small></div>
-    <button id="shareQr" class="icon-btn" title="Show your QR invite">▦</button>
-    <button id="copyCode" class="icon-btn" title="Copy friend code">▢</button>
+  <div class="sidebar-brand-row">
+   <div class="brand"><span class="brand-icon">✳</span><span>pinglet</span></div>
+   <span class="brand-beta">YOUR LITTLE CORNER</span>
   </div>
-  <div class="side-title">YOUR PEOPLE <button id="addFriend" class="plus">+</button></div>
+  <div class="profile">
+    <div class="avatar profile-avatar" id="myAvatar">M</div>
+    <div class="profile-name"><b id="myName">You</b><small>YOUR FRIEND CODE</small><strong id="myCode">FRIEND CODE</strong></div>
+    <button id="shareQr" class="icon-btn" title="Show your QR invite" aria-label="Show your QR invite">▦</button>
+    <button id="copyCode" class="icon-btn" title="Copy friend code" aria-label="Copy friend code">▢</button>
+  </div>
+  <div class="side-title"><span>YOUR CIRCLE</span><button id="addFriend" class="plus" title="Add a friend" aria-label="Add a friend">+</button></div>
+  <label class="friend-search"><span aria-hidden="true">⌕</span><input id="friendSearch" type="search" placeholder="Find a friend…" autocomplete="off" aria-label="Search friends"></label>
   <div id="friends" class="friends"><p class="empty">Your circle starts here.<br>Add someone using their code or QR.</p></div>
-  <div class="side-title requests-title">FRIEND REQUESTS <span id="requestCount" class="count-badge">0</span></div>
+  <div class="request-heading"><span>INCOMING REQUESTS</span><span id="requestCount" class="count-badge">0</span></div>
   <div id="requests" class="requests"><p class="empty">No new requests.</p></div>
-  <div class="side-bottom"><button id="requestsNav" class="nav-btn" aria-expanded="false">📨 Requests</button><button id="gamesNav" class="nav-btn">🎮 &nbsp; Mini games</button><button id="themesNav" class="nav-btn">🎨 &nbsp; Themes</button><button id="logout" class="nav-btn">↪ &nbsp; Sign out</button></div>
+  <div class="side-bottom">
+   <button id="requestsNav" class="nav-btn" aria-expanded="false" title="Friend requests"><span>✉</span><b>Requests</b></button>
+   <button id="gamesNav" class="nav-btn" title="Mini games"><span>✳</span><b>Play</b></button>
+   <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
+   <button id="logout" class="nav-btn" title="Sign out"><span>↗</span><b>Sign out</b></button>
+  </div>
+  <p class="sidebar-caption">A LITTLE SPACE, JUST FOR YOUR PEOPLE.</p>
  </aside>
  <section class="main-panel">
-  <header class="topbar"><div><div class="eyebrow" id="contextEyebrow">YOUR PRIVATE SPACE</div><h2 id="contextTitle">A little more connected.</h2></div><div class="secure-pill">⚠ EXPERIMENTAL · TEST ONLY</div></header>
+  <header class="topbar">
+   <div class="topbar-copy"><div class="eyebrow" id="contextEyebrow">YOUR PRIVATE SPACE</div><h2 id="contextTitle">A little more connected.</h2></div>
+   <div class="topbar-actions">
+    <span class="connection-pill" id="connectionStatus" role="status" aria-live="polite"><i></i> Connecting</span>
+    <span class="secure-pill" title="Identity keys are not independently verified">EXPERIMENTAL ENCRYPTION</span>
+    <button id="topAddFriend" class="primary top-add">＋ Add a friend</button>
+   </div>
+  </header>
   <div id="snakeInviteBanner" class="snake-invite hidden"><span id="snakeInviteText">A friend invited you to Snake Duel.</span><button id="acceptSnakeInvite" class="primary small">Join game</button><button id="declineSnakeInvite" class="ghost small">Not now</button></div>
-  <section id="welcome" class="welcome"><div class="welcome-art">✳</div><h2>Make room for your people.</h2><p>Share your QR invite or friend code. Once a friend request is accepted, they stay saved here.</p><button class="primary" id="welcomeAdd">＋ Add a friend</button><div class="feature-row"><span>🔐 Experimental encryption</span><span>♡ Saved friendships</span><span>🎮 Mini games</span></div></section>
+  <section id="welcome" class="welcome">
+   <div class="welcome-copy">
+    <p class="eyebrow">YOUR SPACE IS READY</p>
+    <h2>Good things happen<br><em>in your own circle.</em></h2>
+    <p>Bring your people a little closer. Add a friend with a code or QR invite, then keep the conversation going.</p>
+    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add your first friend</button><button class="ghost" id="welcomeShare">Share your invite ↗</button></div>
+    <div class="welcome-trust"><span>✦ Friendship-first</span><span>✦ Made for little moments</span></div>
+   </div>
+   <div class="welcome-visual" aria-hidden="true">
+    <div class="visual-orbit orbit-a"></div><div class="visual-orbit orbit-b"></div>
+    <div class="visual-core">✳</div>
+    <div class="visual-note note-a"><span>✦</span> a familiar hello</div>
+    <div class="visual-note note-b"><span>♡</span> your kind of people</div>
+    <div class="visual-note note-c"><span>↗</span> a new memory</div>
+    <div class="visual-caption">LESS NOISE. MORE CONNECTION.</div>
+   </div>
+  </section>
   <section id="chat" class="chat hidden">
-   <div class="friend-head"><div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div><div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label">✎</button></div></div>
-   <div id="messages" class="messages"></div>
-   <form id="sendForm" class="composer"><input id="messageInput" maxlength="2000" placeholder="Write something nice…" autocomplete="off"><button class="send" type="submit">↑</button></form>
-   <p class="composer-note">Experimental encryption only. Friend identity keys are not verified.</p>
+   <div class="friend-head">
+    <div class="avatar" id="peerAvatar">F</div><div class="peer-meta"><b id="peerName">Friend</b><small id="peerCode">FRIEND CODE</small></div>
+    <div class="tag-wrap"><span class="tag" id="peerTag">Friend</span><button class="icon-btn" id="editTag" title="Change friendship label" aria-label="Change friendship label">✎</button></div>
+   </div>
+   <div id="messages" class="messages" aria-live="polite" aria-relevant="additions text"></div>
+   <form id="sendForm" class="composer"><input id="messageInput" maxlength="2000" placeholder="Write something nice…" autocomplete="off" aria-label="Write a message"><button class="send" type="submit" aria-label="Send message">↗</button></form>
+   <p class="composer-note">Messages use experimental encryption. Friend identity keys are not verified.</p>
   </section>
   <section id="games" class="games hidden">
    <div class="game-card"><div class="game-icon">✊</div><p class="eyebrow">QUICK PLAY</p><h2>Rock, paper, scissors</h2><p class="muted">A tiny game while you catch up.</p>
-    <div class="choices"><button data-choice="rock">✊<small>Rock</small></button><button data-choice="paper">✋<small>Paper</small></button><button data-choice="scissors">✌️<small>Scissors</small></button></div><h3 id="gameResult">Choose your move.</h3><button id="resetGame" class="ghost">Play again</button>
+    <div class="choices"><button data-choice="rock" aria-label="Choose rock">✊<small>Rock</small></button><button data-choice="paper" aria-label="Choose paper">✋<small>Paper</small></button><button data-choice="scissors" aria-label="Choose scissors">✌️<small>Scissors</small></button></div><h3 id="gameResult" aria-live="polite">Choose your move.</h3><button id="resetGame" class="ghost">Play again</button>
    </div>
    <div class="game-card snake-card">
     <div class="game-icon">🐍</div><p class="eyebrow">1 VS 1 ONLINE</p><h2>Snake Duel</h2><p class="muted" id="snakeHelp">Open a saved friend's chat, then invite them here. Both players control their own snake.</p>
