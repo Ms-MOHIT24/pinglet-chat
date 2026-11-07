@@ -129,7 +129,7 @@ function show(view) {
   ["homeNav", "gamesNav", "roomsNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
   $("#requests").classList.remove("mobile-open");
   $("#requestsNav").setAttribute("aria-expanded", "false");
-  const panel = $("#" + view);
+  const panel = $("#" + (view === "rooms" ? "callRooms" : view));
   panel.classList.remove("view-enter");
   void panel.offsetWidth;
   panel.classList.add("view-enter");
