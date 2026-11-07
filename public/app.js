@@ -15,7 +15,11 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}), ...(options.headers || {}) }
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || "Something went wrong.");
+  if (!response.ok) {
+    const error = new Error(data.error || "Something went wrong.");
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 function bytesToBase64(value) { return btoa(String.fromCharCode(...new Uint8Array(value))); }
@@ -27,27 +31,51 @@ async function generateKeys() {
 async function exportPublicKey(key) { return crypto.subtle.exportKey("jwk", key); }
 function openKeyDb() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open("pinglet-keys", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("keys");
+    const request = indexedDB.open("pinglet-keys", 2);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("keys")) request.result.createObjectStore("keys");
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
-async function savePrivateKey(key) {
+async function savePrivateKey(key, userId) {
+  if (!userId) throw new Error("Could not link the encryption key to this account.");
   const db = await openKeyDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction("keys", "readwrite");
-    tx.objectStore("keys").put(key, "private");
+    tx.objectStore("keys").put(key, userId);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("Could not save the encryption key.")); };
   });
 }
-async function readPrivateKey() {
+async function readPrivateKey(userId) {
+  if (!userId) return null;
   const db = await openKeyDb();
-  return new Promise((resolve) => {
-    const request = db.transaction("keys").objectStore("keys").get("private");
-    request.onsuccess = () => { const key = request.result || null; db.close(); resolve(key); };
-    request.onerror = () => { db.close(); resolve(null); };
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("keys", "readwrite");
+    const store = tx.objectStore("keys");
+    let key = null;
+    const current = store.get(userId);
+    current.onsuccess = () => {
+      if (current.result) {
+        key = current.result;
+        return;
+      }
+      // Migrate the older single-account key once, keeping existing demo accounts usable.
+      const legacy = store.get("private");
+      legacy.onsuccess = () => {
+        if (legacy.result) {
+          key = legacy.result;
+          store.put(key, userId);
+          store.delete("private");
+        }
+      };
+    };
+    tx.oncomplete = () => { db.close(); resolve(key); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("Could not read the encryption key.")); };
   });
 }
 async function deriveChatKey(friend) {
@@ -102,12 +130,12 @@ $("#authForm").addEventListener("submit", async (event) => {
       const pair = await generateKeys();
       const pubkey = await exportPublicKey(pair.publicKey);
       const data = await api("/register", { method: "POST", body: JSON.stringify({ name: $("#name").value, password: $("#password").value, pubkey }) });
-      await savePrivateKey(pair.privateKey);
+      await savePrivateKey(pair.privateKey, data.user.id);
       privateKey = pair.privateKey;
       await finishLogin(data);
     } else {
       const data = await api("/login", { method: "POST", body: JSON.stringify({ code: $("#code").value, password: $("#password").value }) });
-      privateKey = await readPrivateKey();
+      privateKey = await readPrivateKey(data.user.id);
       if (!privateKey) {
         $("#authError").textContent = "This browser has no saved encryption key for this account. Device recovery is not available in this demo.";
         return;
@@ -126,7 +154,7 @@ async function boot() {
   try {
     const data = await api("/me");
     me = data.user;
-    privateKey = privateKey || await readPrivateKey();
+    privateKey = privateKey || await readPrivateKey(me.id);
     if (!privateKey) throw new Error("Encryption key missing on this browser. Sign in on the browser where you created the account.");
     $("#auth").classList.add("hidden");
     $("#workspace").classList.remove("hidden");
@@ -155,8 +183,11 @@ async function boot() {
     await processPendingInvite();
     updateSnakeUI();
   } catch (error) {
-    localStorage.removeItem("pinglet_token");
-    token = null;
+    // Keep a valid session during a temporary network/database outage.
+    if (error.status === 401 || error.status === 404) {
+      localStorage.removeItem("pinglet_token");
+      token = null;
+    }
     $("#auth").classList.remove("hidden");
     $("#workspace").classList.add("hidden");
     $("#authError").textContent = error.message;
@@ -219,6 +250,7 @@ function renderRequests(incoming, outgoing) {
   const list = $("#requests");
   list.innerHTML = "";
   $("#requestCount").textContent = String(incoming.length);
+  $("#requestsNav").textContent = "📨 Requests" + (incoming.length ? " · " + incoming.length : "");
   if (!incoming.length && !outgoing.length) {
     list.innerHTML = '<p class="empty">No new requests.</p>';
     return;
@@ -267,33 +299,68 @@ async function openPeer(friend) {
 }
 async function loadMessages() {
   if (!peer) return;
+  const activePeer = peer;
   try {
-    const data = await api("/messages/" + peer.id);
-    const list = $("#messages"); list.innerHTML = "";
-    for (const message of data.messages) {
+    const data = await api("/messages/" + activePeer.id);
+    const rendered = await Promise.all((data.messages || []).map(async message => {
       const bubble = document.createElement("div");
       bubble.className = "bubble " + (message.sender === me.id ? "mine" : "theirs");
-      bubble.textContent = await decryptMessage(message, peer);
+      bubble.textContent = await decryptMessage(message, activePeer);
       const time = document.createElement("time");
       time.textContent = new Date(message.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      bubble.appendChild(time); list.appendChild(bubble);
+      bubble.appendChild(time);
+      return bubble;
+    }));
+    // A slower response for the previous chat must not overwrite the newly opened chat.
+    if (!peer || peer.id !== activePeer.id) return;
+    const list = $("#messages");
+    list.replaceChildren();
+    if (!rendered.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty chat-empty";
+      empty.textContent = "No messages yet. Send the first hello.";
+      list.appendChild(empty);
+    } else {
+      list.append(...rendered);
     }
     list.scrollTop = list.scrollHeight;
   } catch (error) { toast(error.message); }
 }
 $("#sendForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const text = $("#messageInput").value.trim();
-  if (!text || !peer) return;
-  $("#messageInput").value = "";
+  const messageText = $("#messageInput").value.trim();
+  const activePeer = peer;
+  if (!messageText || !activePeer) return;
+  const sendButton = $("#sendForm").querySelector("button[type='submit']");
+  sendButton.disabled = true;
   try {
-    const encrypted = await encryptMessage(text, peer);
-    await api("/messages", { method: "POST", body: JSON.stringify({ recipient: peer.id, ...encrypted }) });
-    await loadMessages();
+    const encrypted = await encryptMessage(messageText, activePeer);
+    await api("/messages", { method: "POST", body: JSON.stringify({ recipient: activePeer.id, ...encrypted }) });
+    if (peer && peer.id === activePeer.id) {
+      if ($("#messageInput").value.trim() === messageText) $("#messageInput").value = "";
+      await loadMessages();
+    }
   } catch (error) { toast(error.message); }
+  finally { sendButton.disabled = false; }
 });
+async function copyText(value) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  if (!copied) throw new Error("Clipboard access is unavailable.");
+}
 $("#copyCode").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(me.code); toast("Friend code copied."); }
+  try { await copyText(me.code); toast("Friend code copied."); }
   catch { toast("Your friend code is " + me.code); }
 });
 function showAddFriendModal() {
@@ -324,11 +391,18 @@ async function showQrModal() {
       '<p class="qr-code-text">YOUR FRIEND CODE<br><strong>' + escapeHtml(me.code) + '</strong></p>' +
       '<p class="qr-link">' + escapeHtml(data.url) + '</p>';
     const copy = document.createElement("button"); copy.className = "ghost wide"; copy.textContent = "Copy invite link";
-    copy.addEventListener("click", async () => { await navigator.clipboard.writeText(data.url); toast("Invite link copied."); });
+    copy.addEventListener("click", async () => {
+      try { await copyText(data.url); toast("Invite link copied."); }
+      catch { toast("Could not access the clipboard on this browser."); }
+    });
     const share = document.createElement("button"); share.className = "primary wide"; share.textContent = "Share invite";
     share.addEventListener("click", async () => {
-      if (navigator.share) await navigator.share({ title: "Join me on Pinglet", text: "Scan or open my Pinglet invite.", url: data.url });
-      else { await navigator.clipboard.writeText(data.url); toast("Invite link copied."); }
+      try {
+        if (navigator.share) await navigator.share({ title: "Join me on Pinglet", text: "Scan or open my Pinglet invite.", url: data.url });
+        else { await copyText(data.url); toast("Invite link copied."); }
+      } catch (error) {
+        if (error.name !== "AbortError") toast("Could not share this invite right now.");
+      }
     });
     content.append(copy, share);
   } catch (error) { content.innerHTML = ""; $("#modalError").textContent = error.message; }
@@ -338,6 +412,14 @@ $("#welcomeAdd").addEventListener("click", showAddFriendModal);
 $("#shareQr").addEventListener("click", showQrModal);
 $("#modalClose").addEventListener("click", () => $("#modal").classList.add("hidden"));
 $("#modal").addEventListener("click", event => { if (event.target.id === "modal") $("#modal").classList.add("hidden"); });
+$("#themeModal").addEventListener("click", event => { if (event.target.id === "themeModal") $("#themeModal").classList.add("hidden"); });
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    $("#modal").classList.add("hidden");
+    $("#themeModal").classList.add("hidden");
+    $("#requests").classList.remove("mobile-open");
+  }
+});
 $("#modalForm").addEventListener("submit", async event => {
   event.preventDefault();
   if (event.currentTarget.dataset.kind === "label") return;
@@ -353,7 +435,13 @@ $("#modalForm").addEventListener("submit", async event => {
     }
   } catch (error) { $("#modalError").textContent = error.message; }
 });
+$("#requestsNav").addEventListener("click", () => {
+  const requests = $("#requests");
+  const opened = requests.classList.toggle("mobile-open");
+  $("#requestsNav").setAttribute("aria-expanded", String(opened));
+});
 $("#gamesNav").addEventListener("click", () => {
+  $("#requests").classList.remove("mobile-open");
   show("games"); $("#contextEyebrow").textContent = "A LITTLE BREAK"; $("#contextTitle").textContent = "Play something.";
 });
 $("#logout").addEventListener("click", () => { localStorage.removeItem("pinglet_token"); location.reload(); });
