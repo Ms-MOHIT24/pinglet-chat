@@ -113,6 +113,18 @@ check("Policy and child-safety pages are present and accessible",
   fs.existsSync(path.join(root, "public/delete-account.html")) &&
   html.includes('href="/terms.html"') &&
   html.includes('href="/privacy.html"'));
+const capacitor = JSON.parse(read("capacitor.config.json"));
+check("Android ships its own web UI instead of remote-loading the website",
+  !capacitor.server || !capacitor.server.url &&
+  app.includes("const API_ORIGIN = isNativeShell ?") &&
+  html.includes('src="https://pinglet-chat-live.onrender.com/socket.io/socket.io.js"') &&
+  server.includes('"https://localhost"') &&
+  server.includes('"https://pinglet-chat-live.onrender.com"'));
+check("Blocked accounts are removed from active Snake Duel games",
+  server.includes("removeBlockedPairFromSnakeGames") &&
+  server.includes('game.status="finished"') &&
+  server.includes('This game ended because one player blocked the other.'));
+
 check("Call rooms require a saved, non-blocked friendship",
   server.includes('if (await areBlockedEither(userId, participant.userId) || !await areFriends(userId, participant.userId))') &&
   server.includes("removeBlockedPairFromCalls") &&
