@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "public/**"
+      - "scripts/**"
       - "server.js"
       - "package.json"
       - "package-lock.json"
@@ -28,6 +29,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Check JavaScript syntax
         run: node --check server.js && node --check public/app.js
+
+      - name: Smoke-check app features
+        run: node scripts/smoke-check.js
 
 
       - name: Setup Node
