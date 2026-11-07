@@ -10,7 +10,7 @@ let rpsRounds = Number(localStorage.getItem("pinglet_rps_rounds") || 0);
 const encoder = new TextEncoder(), decoder = new TextDecoder();
 const chatKeyCache = new Map();
 const voiceObjectUrls = new Set();
-let voiceRecorder = null, voiceChunks = [], voiceStartedAt = 0, voiceAbort = false, voicePointerId = null;
+let voiceRecorder = null, voiceChunks = [], voiceStartedAt = 0, voiceAbort = false, voicePointerId = null, voicePointerHeld = false;
 const inviteMatch = location.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
 if (inviteMatch) {
   sessionStorage.setItem("pinglet_pending_invite", inviteMatch[1].toUpperCase());
@@ -447,7 +447,7 @@ $("#sendForm").addEventListener("submit", async event => {
 });
 /* Walkie-talkie voice messages are encrypted before storage and limited to short clips. */
 const voiceMaxDurationMs = 8000;
-const voiceMaxBytes = 36 * 1024;
+const voiceMaxBytes = 30 * 1024;
 function voiceMimeType() {
   if (!window.MediaRecorder) throw new Error("Voice recording isn't supported in this browser.");
   const choices = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
@@ -463,23 +463,24 @@ async function beginVoiceMessage(event) {
     voiceAbort = false;
     voicePointerId = event && event.pointerId !== undefined ? event.pointerId : null;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
-    if (!peer || !$("#chat").classList.contains("view-enter") && $("#chat").classList.contains("hidden")) {
+    if (!voicePointerHeld || !peer || $("#chat").classList.contains("hidden")) {
       stream.getTracks().forEach(track => track.stop());
       return;
     }
     const mimeType = voiceMimeType();
     voiceChunks = [];
-    voiceRecorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 });
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 });
+    voiceRecorder = recorder;
     voiceStartedAt = Date.now();
     const button = $("#walkieTalkie");
     button.classList.add("recording");
     button.querySelector("small").textContent = "RECORDING · RELEASE TO SEND";
-    voiceRecorder.ondataavailable = item => { if (item.data && item.data.size) voiceChunks.push(item.data); };
-    voiceRecorder.onerror = () => { voiceAbort = true; finishVoiceMessage(); };
-    voiceRecorder.onstop = async () => {
-      const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || mimeType || "audio/webm" });
+    recorder.ondataavailable = item => { if (item.data && item.data.size) voiceChunks.push(item.data); };
+    recorder.onerror = () => { voiceAbort = true; if (voiceRecorder === recorder) finishVoiceMessage(); };
+    recorder.onstop = async () => {
+      const blob = new Blob(voiceChunks, { type: recorder.mimeType || mimeType || "audio/webm" });
       stream.getTracks().forEach(track => track.stop());
-      voiceRecorder = null;
+      if (voiceRecorder === recorder) voiceRecorder = null;
       voiceChunks = [];
       button.classList.remove("recording");
       button.querySelector("small").textContent = "HOLD TO TALK";
@@ -498,8 +499,8 @@ async function beginVoiceMessage(event) {
       } catch (error) { toast(error.message || "Could not send that voice message."); }
       finally { button.disabled = false; }
     };
-    voiceRecorder.start(250);
-    setTimeout(() => { if (voiceRecorder && voiceRecorder.state === "recording") finishVoiceMessage(); }, voiceMaxDurationMs);
+    recorder.start(250);
+    setTimeout(() => { if (voiceRecorder === recorder && recorder.state === "recording") finishVoiceMessage(); }, voiceMaxDurationMs);
   } catch (error) {
     if (voiceRecorder && voiceRecorder.stream) voiceRecorder.stream.getTracks().forEach(track => track.stop());
     voiceRecorder = null;
@@ -514,25 +515,41 @@ function finishVoiceMessage() {
   try { voiceRecorder.stop(); } catch { voiceRecorder = null; }
 }
 function cancelVoiceMessage() {
-  if (!voiceRecorder) return;
   voiceAbort = true;
+  if (!voiceRecorder) return;
   finishVoiceMessage();
 }
 const walkieButton = $("#walkieTalkie");
 walkieButton.addEventListener("pointerdown", event => {
   if (event.button !== undefined && event.button !== 0) return;
   event.preventDefault();
+  voicePointerHeld = true;
   try { walkieButton.setPointerCapture(event.pointerId); } catch {}
   beginVoiceMessage(event);
 });
 walkieButton.addEventListener("pointerup", event => {
   if (voicePointerId !== null && event.pointerId !== voicePointerId) return;
+  voicePointerHeld = false;
   voicePointerId = null;
   finishVoiceMessage();
 });
-walkieButton.addEventListener("pointercancel", () => { voicePointerId = null; cancelVoiceMessage(); });
+walkieButton.addEventListener("pointercancel", () => { voicePointerHeld = false; voicePointerId = null; cancelVoiceMessage(); });
 walkieButton.addEventListener("lostpointercapture", () => {
   if (voiceRecorder && voiceRecorder.state === "recording") finishVoiceMessage();
+});
+walkieButton.addEventListener("keydown", event => {
+  if ((event.code === "Space" || event.code === "Enter") && !event.repeat) {
+    event.preventDefault();
+    voicePointerHeld = true;
+    beginVoiceMessage(null);
+  }
+});
+walkieButton.addEventListener("keyup", event => {
+  if (event.code === "Space" || event.code === "Enter") {
+    event.preventDefault();
+    voicePointerHeld = false;
+    finishVoiceMessage();
+  }
 });
 walkieButton.addEventListener("contextmenu", event => event.preventDefault());
 
