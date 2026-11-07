@@ -454,6 +454,7 @@ app.use(express.static(publicDir, {
   }
 }));
 app.get("/", (req, res) => res.sendFile(path.join(publicDir, "index.html")));
+app.get(["/games", "/call-rooms"], (req, res) => res.sendFile(path.join(publicDir, "index.html")));
 app.get("/invite/:code", (req, res) => {
   if (!/^[a-f0-9]{14}$/i.test(req.params.code)) return res.status(404).send("Invite not found.");
   res.sendFile(path.join(publicDir, "index.html"));
