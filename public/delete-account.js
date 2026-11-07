@@ -1,4 +1,7 @@
 "use strict";
+const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
+  (location.protocol === "https:" && location.hostname === "localhost" && !location.port);
+const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
 const form = document.querySelector("#deleteWebForm");
 const statusNode = document.querySelector("#deleteWebStatus");
 const button = document.querySelector("#deleteWebButton");
@@ -12,14 +15,14 @@ form.addEventListener("submit", async event => {
   try {
     const code = document.querySelector("#deleteWebCode").value.trim().toUpperCase();
     const password = document.querySelector("#deleteWebPassword").value;
-    const loginResponse = await fetch("/api/login", {
+    const loginResponse = await fetch(API_ORIGIN + "/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code, password })
     });
     const login = await loginResponse.json().catch(() => ({}));
     if (!loginResponse.ok || !login.token || !login.user?.id) throw new Error(login.error || "Could not sign in. Check your friend code and password.");
-    const deleteResponse = await fetch("/api/me", {
+    const deleteResponse = await fetch(API_ORIGIN + "/api/me", {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
