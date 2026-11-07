@@ -30,6 +30,7 @@ app.use(helmet({ contentSecurityPolicy: { directives: {
 app.use(express.json({ limit: "64kb" }));
 app.use("/api", rateLimit({ windowMs: 60000, limit: 120, standardHeaders: "draft-7", legacyHeaders: false }));
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: "draft-7", legacyHeaders: false });
+const lookupLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false });
 
 async function initializeDatabase() {
   await pool.query(`
@@ -129,7 +130,7 @@ app.get("/api/me/invite-qr", auth, async (req, res) => {
   const qr = await QRCode.toDataURL(url, { width: 320, margin: 2, errorCorrectionLevel: "M", color: { dark: "#111827", light: "#FFFFFF" } });
   res.json({ url, qr });
 });
-app.get("/api/lookup/:code", auth, authLimiter, async (req, res) => {
+app.get("/api/lookup/:code", auth, lookupLimiter, async (req, res) => {
   const result = await pool.query("SELECT id,name,code,pubkey FROM users WHERE code=$1", [String(req.params.code).toUpperCase()]);
   if (!result.rowCount) return res.status(404).json({ error: "No account uses that friend code." });
   res.json({ user: result.rows[0] });
@@ -361,6 +362,23 @@ const meNameCache=new Map();
 async function cacheNames() {
   try { const result=await pool.query("SELECT id,name FROM users"); result.rows.forEach(u=>meNameCache.set(u.id,u.name)); } catch {}
 }
-app.get("*",(req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir, {
+  index: false,
+  etag: true,
+  maxAge: "1h",
+  setHeaders(res, filePath) {
+    if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.webmanifest")) {
+      res.setHeader("Cache-Control", "no-cache");
+    }
+  }
+}));
+app.get("/", (req, res) => res.sendFile(path.join(publicDir, "index.html")));
+app.get("/invite/:code", (req, res) => {
+  if (!/^[a-f0-9]{14}$/i.test(req.params.code)) return res.status(404).send("Invite not found.");
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+app.use("/api", (req, res) => res.status(404).json({ error: "API endpoint not found." }));
+app.use((req, res) => res.status(404).type("text/plain").send("Page not found."));
 initializeDatabase().then(async()=>{await cacheNames();server.listen(PORT,"0.0.0.0",()=>console.log("Pinglet listening on port "+PORT));})
 .catch(error=>{console.error("Database initialization failed:",error.message);process.exit(1);});
