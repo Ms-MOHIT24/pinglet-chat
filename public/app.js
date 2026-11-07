@@ -3,6 +3,7 @@ let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socke
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
 let snakePeerId = null, snakeState = null;
 const encoder = new TextEncoder(), decoder = new TextDecoder();
+const chatKeyCache = new Map();
 const inviteMatch = location.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
 if (inviteMatch) {
   sessionStorage.setItem("pinglet_pending_invite", inviteMatch[1].toUpperCase());
@@ -79,8 +80,11 @@ async function readPrivateKey(userId) {
   });
 }
 async function deriveChatKey(friend) {
+  if (chatKeyCache.has(friend.id)) return chatKeyCache.get(friend.id);
   const publicKey = await crypto.subtle.importKey("jwk", friend.pubkey, { name: "ECDH", namedCurve: "P-256" }, false, []);
-  return crypto.subtle.deriveKey({ name: "ECDH", public: publicKey }, privateKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  const key = await crypto.subtle.deriveKey({ name: "ECDH", public: publicKey }, privateKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  chatKeyCache.set(friend.id, key);
+  return key;
 }
 async function encryptMessage(text, friend) {
   const key = await deriveChatKey(friend), iv = crypto.getRandomValues(new Uint8Array(12));
@@ -116,6 +120,7 @@ function setAuthTab(next) {
   $("#nameWrap").classList.toggle("hidden", next === "login");
   $("#codeWrap").classList.toggle("hidden", next !== "login");
   $("#name").required = next !== "login";
+  $("#code").required = next === "login";
   $("#authSubmit").textContent = next === "login" ? "Sign in →" : "Create my space →";
   $("#authHint").textContent = next === "login" ? "Use your friend code and password." : "Your unique friend code is created automatically.";
 }
@@ -239,6 +244,8 @@ function renderFriends() {
   friends.forEach(friend => {
     const button = document.createElement("button");
     button.className = "friend" + (peer && peer.id === friend.id ? " active" : "");
+    button.title = friend.name;
+    button.setAttribute("aria-label", "Open chat with " + friend.name);
     button.innerHTML = '<span class="avatar">' + escapeHtml(friend.name.charAt(0).toUpperCase()) +
       '</span><span><b>' + escapeHtml(friend.name) + '</b><small>' + escapeHtml(friend.code) +
       '</small></span><span class="tag">' + escapeHtml(friend.label || "Friend") + '</span>';
