@@ -1,6 +1,6 @@
 # Pinglet — friend chat preview
 
-Pinglet is a browser-first chat prototype with unique friend codes, QR invites, saved friendships, friendship labels, one-to-one messaging, Rock/Paper/Scissors, and a two-player Snake Duel. The web app is also packaged as an Android preview with Capacitor.
+Pinglet is a browser-first chat prototype with unique friend codes, QR invites, searchable saved friendships, friendship labels, one-to-one messaging, customizable themes, Rock/Paper/Scissors, and a two-player Snake Duel. The responsive interface is designed for desktop and mobile browsers. The web app is also packaged as an Android preview with Capacitor.
 
 ## Important limitations
 
