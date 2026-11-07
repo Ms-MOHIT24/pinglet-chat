@@ -47,8 +47,8 @@
   <div class="side-bottom">
    <button id="homeNav" class="nav-btn active" title="Chats" aria-current="page"><span>◉</span><b>Chats</b></button>
    <button id="requestsNav" class="nav-btn" aria-expanded="false" title="Friend requests"><span>✉</span><b>Requests</b><i id="requestsNavCount" class="nav-dot hidden">0</i></button>
-   <button id="gamesNav" class="nav-btn" title="Mini games"><span>✳</span><b>Games</b></button>
-    <button id="roomsNav" class="nav-btn" title="Voice and video rooms"><span>◉</span><b>Call rooms</b></button>
+   <a id="gamesNav" class="nav-btn" href="/games" title="Open games"><span>✳</span><b>Games</b></a>
+    <a id="roomsNav" class="nav-btn" href="/call-rooms" title="Open voice and video rooms"><span>◉</span><b>Call rooms</b></a>
    <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
    <button id="logout" class="nav-btn" title="Sign out"><span>↗</span><b>Sign out</b></button>
   </div>
@@ -60,7 +60,7 @@
    <div class="topbar-actions">
     <span class="connection-pill" id="connectionStatus" role="status" aria-live="polite"><i></i> Connecting</span>
     <span class="secure-pill" title="Identity keys are not independently verified">EXPERIMENTAL ENCRYPTION</span>
-    <button id="topAddFriend" class="primary top-add">＋ Add a friend</button>
+    <a id="topGames" class="primary top-games" href="/games">✊ Rock Paper Scissors</a><button id="topAddFriend" class="primary top-add">＋ Add a friend</button>
    </div>
   </header>
   <div id="snakeInviteBanner" class="snake-invite hidden"><span id="snakeInviteText">A friend invited you to Snake Duel.</span><button id="acceptSnakeInvite" class="primary small">Join game</button><button id="declineSnakeInvite" class="ghost small">Not now</button></div>
@@ -69,7 +69,7 @@
     <p class="eyebrow">YOUR SPACE IS READY</p>
     <h2>Good things happen<br><em>in your own circle.</em></h2>
     <p>Bring your people a little closer. Add a friend with a code or QR invite, then keep the conversation going.</p>
-    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add a friend</button><button class="ghost" id="welcomeScan">⌗ Scan a QR</button><button class="ghost" id="welcomeShare">Share your QR ↗</button><button class="primary" id="welcomeRps">✊ Play Rock Paper Scissors</button></div>
+    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add a friend</button><button class="ghost" id="welcomeScan">⌗ Scan a QR</button><button class="ghost" id="welcomeShare">Share your QR ↗</button><a class="primary rps-launch-link" id="welcomeRps" href="/games">✊ Play Rock Paper Scissors</a></div>
     <div class="welcome-trust"><span>✦ Friendship-first</span><span>✦ Made for little moments</span></div>
     <div class="welcome-stats" aria-label="Your Pinglet activity">
      <div class="welcome-stat"><b id="circleStat">0</b><span>IN YOUR CIRCLE</span></div>
