@@ -131,6 +131,11 @@ check("Android ships its own web UI instead of remote-loading the website",
   html.includes('src="https://pinglet-chat-live.onrender.com/socket.io/socket.io.js"') &&
   server.includes('"https://localhost"') &&
   server.includes('"https://pinglet-chat-live.onrender.com"'));
+check("Android media permissions are included in generated native project",
+  fs.existsSync(path.join(root, "scripts/configure-android-permissions.js")) &&
+  ["android.permission.CAMERA", "android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"].every(permission =>
+    read("scripts/configure-android-permissions.js").includes(permission)));
+
 check("Blocked accounts are removed from active Snake Duel games",
   server.includes("removeBlockedPairFromSnakeGames") &&
   server.includes('game.status="finished"') &&
