@@ -90,6 +90,14 @@ function auth(req, res, next) {
     next();
   } catch { res.status(401).json({ error: "Please sign in again." }); }
 }
+async function termsRequired(req, res, next) {
+  try {
+    const result = await pool.query("SELECT terms_accepted_at IS NOT NULL AS accepted FROM users WHERE id=$1", [req.user.id]);
+    if (!result.rowCount) return res.status(401).json({ error: "Please sign in again." });
+    if (!result.rows[0].accepted) return res.status(428).json({ error: "Please review and accept the Terms of Use before using this feature." });
+    next();
+  } catch (error) { next(error); }
+}
 function validPubkey(key) {
   return !!key && key.kty === "EC" && key.crv === "P-256" && typeof key.x === "string" && typeof key.y === "string";
 }
@@ -192,7 +200,7 @@ app.get("/api/friend-requests", auth, async (req, res) => {
   ]);
   res.json({ incoming: incoming.rows, outgoing: outgoing.rows });
 });
-app.post("/api/friend-requests", auth, async (req, res) => {
+app.post("/api/friend-requests", auth, termsRequired, async (req, res) => {
   const code = typeof req.body.code === "string" ? req.body.code.trim().toUpperCase() : "";
   if (!code) return res.status(400).json({ error: "Enter a friend code." });
   const found = await pool.query("SELECT id,name,code FROM users WHERE code=$1", [code]);
@@ -225,7 +233,7 @@ app.post("/api/friend-requests", auth, async (req, res) => {
   io.to(target.id).emit("friend-request", { id: request.rows[0].id });
   res.json({ status: "pending", request: request.rows[0], friend: target });
 });
-app.post("/api/friend-requests/:id/accept", auth, async (req, res) => {
+app.post("/api/friend-requests/:id/accept", auth, termsRequired, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -250,7 +258,7 @@ app.post("/api/friend-requests/:id/decline", auth, async (req, res) => {
   if (!result.rowCount) return res.status(404).json({ error: "Friend request not found." });
   res.json({ status: "declined" });
 });
-app.patch("/api/friends/:id/label", auth, async (req, res) => {
+app.patch("/api/friends/:id/label", auth, termsRequired, async (req, res) => {
   const label = typeof req.body.label === "string" ? req.body.label.trim() : "";
   if (!labelOptions.includes(label)) return res.status(400).json({ error: "Choose a label from the list." });
   const result = await pool.query("UPDATE friendships SET label=$1 WHERE user_id=$2 AND friend_id=$3 RETURNING label", [label, req.user.id, req.params.id]);
@@ -325,7 +333,7 @@ app.get("/api/messages/:peer", auth, async (req, res) => {
   const result = await pool.query("SELECT id,sender,recipient,ciphertext,iv,created FROM messages WHERE conversation=$1 ORDER BY created DESC LIMIT 100", [conversation]);
   res.json({ messages: result.rows.reverse() });
 });
-app.post("/api/messages", auth, async (req, res) => {
+app.post("/api/messages", auth, termsRequired, async (req, res) => {
   const { recipient, ciphertext, iv } = req.body;
   if (typeof recipient !== "string" || !recipient || !validBase64(ciphertext) || ciphertext.length > 60000 || !validBase64(iv) || Buffer.from(iv, "base64").length !== 12) {
     return res.status(400).json({ error: "Invalid encrypted message." });
@@ -430,9 +438,14 @@ function removeBlockedPairFromCalls(firstUserId, secondUserId) {
     }
   }
 }
-io.use((socket,next) => {
-  try { socket.user=jwt.verify(socket.handshake.auth.token,SECRET,{issuer:"pinglet",audience:"pinglet-web"}); next(); }
-  catch { next(new Error("Unauthorized")); }
+io.use(async (socket,next) => {
+  try {
+    const user = jwt.verify(socket.handshake.auth.token,SECRET,{issuer:"pinglet",audience:"pinglet-web"});
+    const result = await pool.query("SELECT terms_accepted_at IS NOT NULL AS accepted FROM users WHERE id=$1", [user.id]);
+    if (!result.rowCount || !result.rows[0].accepted) return next(new Error("Please accept Pinglet's Terms first."));
+    socket.user = user;
+    next();
+  } catch { next(new Error("Unauthorized")); }
 });
 io.on("connection", socket => {
   const userId=socket.user.id;
