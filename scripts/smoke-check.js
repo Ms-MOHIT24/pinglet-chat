@@ -55,7 +55,13 @@ check("Voice clip and message request sizes are bounded",
 check("Call room and RPS views have hidden-state styling",
   css.includes(".call-rooms.hidden{display:none!important}") &&
   css.includes(".games"));
+check("Shared web and Android motion system",
+  css.includes("Pinglet motion system") &&
+  css.includes("pinglet-ambient-drift") &&
+  css.includes("pinglet-message-in") &&
+  css.includes("prefers-reduced-motion:reduce") &&
+  app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v9"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v10"/.test(sw));
 
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
