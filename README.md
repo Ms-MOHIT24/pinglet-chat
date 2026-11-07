@@ -44,3 +44,8 @@ Run `node --check server.js`, `node --check public/app.js`, and `node scripts/sm
 The GitHub Actions workflow runs the syntax and feature smoke-checks, then builds a debug APK and publishes it as the `android-latest` preview release. It is a test build, not a Play Store release.
 
 Render serves the Node.js app from the `main` branch. Check the Render Events page and verify the deployed commit after publishing a new build.
+
+
+## Chat composer usability
+
+Unsent chat drafts stay attached to the selected friend while switching conversations during the current session. Drafts are kept in memory only (not written to local storage) and are cleared on sign-out. The Send control stays disabled until a conversation and non-empty message are ready.
