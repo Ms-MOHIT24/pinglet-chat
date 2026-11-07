@@ -1094,7 +1094,8 @@ $("#deleteAccountForm").addEventListener("submit", async event => {
   const button = $("#deleteAccountButton"); button.disabled = true; $("#deleteAccountError").textContent = "";
   try {
     await api("/me", { method: "DELETE", body: JSON.stringify({ password: $("#deletePassword").value }) });
-    await deletePrivateKey(me.id);
+    try { await deletePrivateKey(me.id); }
+    catch (storageError) { console.warn("Account deleted; local key cleanup could not be confirmed:", storageError); }
     localStorage.removeItem("pinglet_token");
     messageDrafts.clear();
     if (socket) socket.disconnect();
