@@ -2,6 +2,7 @@ const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
 const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
+  (location.protocol === "https:" && location.hostname === "localhost" && !location.port) ||
   !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
 const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
 let messageSending = false;
