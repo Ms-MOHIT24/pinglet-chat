@@ -27,7 +27,7 @@ app.use(helmet({ contentSecurityPolicy: { directives: {
   connectSrc: ["'self'", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
   objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"]
 } } }));
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "80kb" }));
 app.use("/api", rateLimit({ windowMs: 60000, limit: 120, standardHeaders: "draft-7", legacyHeaders: false }));
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: "draft-7", legacyHeaders: false });
 const lookupLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: "draft-7", legacyHeaders: false });
@@ -222,7 +222,7 @@ app.get("/api/messages/:peer", auth, async (req, res) => {
 });
 app.post("/api/messages", auth, async (req, res) => {
   const { recipient, ciphertext, iv } = req.body;
-  if (typeof recipient !== "string" || !recipient || !validBase64(ciphertext) || ciphertext.length > 12000 || !validBase64(iv) || Buffer.from(iv, "base64").length !== 12) {
+  if (typeof recipient !== "string" || !recipient || !validBase64(ciphertext) || ciphertext.length > 60000 || !validBase64(iv) || Buffer.from(iv, "base64").length !== 12) {
     return res.status(400).json({ error: "Invalid encrypted message." });
   }
   if (!await areFriends(req.user.id, recipient)) return res.status(403).json({ error: "You can only message saved friends." });
