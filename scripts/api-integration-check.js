@@ -2,6 +2,7 @@
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 const assert = require("node:assert/strict");
+const { io: createSocket } = require("socket.io-client");
 
 const root = path.resolve(__dirname, "..");
 const port = Number(process.env.TEST_PORT || 3187);
@@ -10,6 +11,7 @@ const secret = process.env.JWT_SECRET || "pinglet-integration-test-secret-value-
 const adminToken = process.env.REPORTS_ADMIN_TOKEN || "pinglet-integration-moderator-token-1234567890";
 let output = "";
 let child;
+const sockets = [];
 
 async function request(url, { method = "GET", token, body, headers = {} } = {}) {
   const response = await fetch(base + url, {
@@ -23,6 +25,26 @@ async function request(url, { method = "GET", token, body, headers = {} } = {}) 
   });
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data, headers: response.headers };
+}
+function connectSocket(token) {
+  return new Promise((resolve, reject) => {
+    const socket = createSocket(base, { auth: { token }, transports: ["websocket"], reconnection: false });
+    const timeout = setTimeout(() => { socket.close(); reject(new Error("Socket connection timed out.")); }, 8000);
+    socket.once("connect", () => { clearTimeout(timeout); resolve(socket); });
+    socket.once("connect_error", error => { clearTimeout(timeout); socket.close(); reject(error); });
+  });
+}
+function nextSocketEvent(socket, event, timeoutMs = 6000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Timed out waiting for socket event: " + event)), timeoutMs);
+    socket.once(event, data => { clearTimeout(timer); resolve(data); });
+  });
+}
+function socketAck(socket, event, payload) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Timed out waiting for acknowledgement: " + event)), 6000);
+    socket.emit(event, payload, result => { clearTimeout(timer); resolve(result); });
+  });
 }
 function pass(label) { process.stdout.write("PASS  " + label + "\n"); }
 async function waitForServer() {
@@ -136,6 +158,11 @@ async function main() {
       method: "POST", token: aliceToken, body: {}
     });
     assert.equal(blocked.status, 200);
+    const callLeftNotice = await callLeft;
+    assert.equal(callLeftNotice.peerId, aliceSocket.id);
+    const snakeEndedNotice = await snakeEnded;
+    assert.match(snakeEndedNotice.message, /blocked the other/i);
+    pass("Blocking immediately ends active call and Snake Duel sessions");
     const blockedList = await request("/api/blocks", { token: aliceToken });
     assert.ok(blockedList.data.blocked.some(item => item.id === bobId));
     const messageAfterBlock = await request("/api/messages", {
@@ -154,6 +181,50 @@ async function main() {
     assert.equal(unblocked.status, 200);
     pass("Unblock endpoint works");
 
+    const aliceSocket = await connectSocket(aliceToken);
+    const bobSocket = await connectSocket(bobToken);
+    sockets.push(aliceSocket, bobSocket);
+    pass("Authenticated Socket.IO connections work for both friends");
+
+    const createdRoom = await socketAck(aliceSocket, "call:create", { mode: "voice" });
+    assert.equal(createdRoom.ok, true);
+    assert.match(createdRoom.code, /^\\d{4}$/);
+    const participantJoined = nextSocketEvent(aliceSocket, "call:participant-joined");
+    const joinedRoom = await socketAck(bobSocket, "call:join", { code: createdRoom.code });
+    assert.equal(joinedRoom.ok, true);
+    assert.equal(joinedRoom.mode, "voice");
+    assert.equal(joinedRoom.participants.length, 1);
+    const joinedNotice = await participantJoined;
+    assert.equal(joinedNotice.userId, bobId);
+    pass("Private call room creation, saved-friend join and participant updates work");
+
+    const incomingSignal = nextSocketEvent(bobSocket, "call:signal");
+    aliceSocket.emit("call:signal", {
+      toPeerId: bobSocket.id,
+      description: { type: "offer", sdp: "v=0\\r\\n" }
+    });
+    const signal = await incomingSignal;
+    assert.equal(signal.description.type, "offer");
+    assert.equal(signal.fromPeerId, aliceSocket.id);
+    const incomingReaction = nextSocketEvent(bobSocket, "call:reaction");
+    aliceSocket.emit("call:reaction", { emoji: "👏" });
+    const reaction = await incomingReaction;
+    assert.equal(reaction.emoji, "👏");
+    pass("Call signaling and reactions relay only to a room participant");
+
+    const incomingSnakeInvite = nextSocketEvent(bobSocket, "snake:invite");
+    aliceSocket.emit("snake:join", { peerId: bobId });
+    const invite = await incomingSnakeInvite;
+    assert.equal(invite.fromId, aliceId);
+    const aliceSnakeState = nextSocketEvent(aliceSocket, "snake:state");
+    bobSocket.emit("snake:join", { peerId: aliceId });
+    const gameState = await aliceSnakeState;
+    assert.equal(gameState.status, "playing");
+    assert.equal(gameState.players.length, 2);
+    pass("Snake Duel friend invitations and two-player game start work");
+
+    const callLeft = nextSocketEvent(bobSocket, "call:participant-left");
+    const snakeEnded = nextSocketEvent(bobSocket, "snake:error");
     const wrongDelete = await request("/api/me", {
       method: "DELETE", token: bobToken, body: { password: "incorrect-password" }
     });
@@ -186,6 +257,7 @@ async function main() {
     process.stderr.write(output);
     throw error;
   } finally {
+    sockets.forEach(socket => socket.disconnect());
     if (child && child.exitCode === null) {
       child.kill("SIGTERM");
       await Promise.race([
