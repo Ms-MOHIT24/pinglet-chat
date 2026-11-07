@@ -1,8 +1,8 @@
 {
   "name": "pinglet-chat",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
-  "description": "Pinglet responsive friend chat with QR invites, search, custom themes and mini games",
+  "description": "Pinglet social chat with QR camera scanning, searchable friendships and mini games",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
