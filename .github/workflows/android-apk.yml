@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check JavaScript syntax
-        run: node --check server.js && node --check public/app.js && node --check scripts/smoke-check.js && node --check scripts/api-integration-check.js && node --check scripts/configure-android-signing.js
+        run: node --check server.js && node --check public/app.js && node --check scripts/smoke-check.js && node --check scripts/api-integration-check.js && node --check scripts/configure-android-signing.js && node --check scripts/copy-vendor.js && node --check scripts/configure-android-permissions.js
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
@@ -74,6 +74,9 @@ jobs:
 
       - name: Generate Android project
         run: npx cap add android
+
+      - name: Configure Android media permissions
+        run: node scripts/configure-android-permissions.js
 
       - name: Sync bundled web assets
         run: npx cap sync android
