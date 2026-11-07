@@ -2,6 +2,8 @@ const $ = (s) => document.querySelector(s);
 let token = localStorage.getItem("pinglet_token"), me = null, peer = null, socket = null;
 let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
+let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
+let qrDetector = null, qrTrack = null, qrTorchOn = false, pendingScannedCode = null;
 let rpsWins = Number(localStorage.getItem("pinglet_rps_wins") || 0);
 let rpsRounds = Number(localStorage.getItem("pinglet_rps_rounds") || 0);
 const encoder = new TextEncoder(), decoder = new TextDecoder();
@@ -461,6 +463,228 @@ async function showQrModal() {
     content.append(copy, share);
   } catch (error) { content.innerHTML = ""; $("#modalError").textContent = error.message; }
 }
+function extractPingletCode(value) {
+  const raw = String(value || "").trim();
+  if (/^[a-f0-9]{14}$/i.test(raw)) return raw.toUpperCase();
+  try {
+    const url = new URL(raw);
+    const isPingletOrigin = url.origin === location.origin || url.origin === "https://pinglet-chat-live.onrender.com";
+    const match = url.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
+    if (isPingletOrigin && match) return match[1].toUpperCase();
+  } catch {}
+  return null;
+}
+async function submitFriendCode(code) {
+  const data = await api("/friend-requests", { method: "POST", body: JSON.stringify({ code }) });
+  if (data.status === "friends") {
+    await loadFriends();
+    toast("You're already friends with " + data.friend.name + ".");
+  } else {
+    await loadRequests();
+    toast("Friend request sent to " + data.friend.name + ".");
+  }
+  return data;
+}
+async function getQrDetector() {
+  if (qrDetector) return qrDetector;
+  if (!("BarcodeDetector" in window)) return null;
+  try {
+    const formats = await BarcodeDetector.getSupportedFormats();
+    if (formats.includes("qr_code")) qrDetector = new BarcodeDetector({ formats: ["qr_code"] });
+  } catch {}
+  return qrDetector;
+}
+function setScannerStatus(message) {
+  $("#scannerStatus").textContent = message;
+}
+function stopQrScanner(showResume = false) {
+  if (qrFrameId) cancelAnimationFrame(qrFrameId);
+  qrFrameId = 0;
+  qrFrameBusy = false;
+  if (qrStream) qrStream.getTracks().forEach(track => track.stop());
+  qrStream = null;
+  qrTrack = null;
+  qrTorchOn = false;
+  const video = $("#scannerVideo");
+  if (video) { video.pause(); video.srcObject = null; }
+  const torch = $("#scannerTorch");
+  if (torch) { torch.classList.add("hidden"); torch.textContent = "☼ Torch off"; }
+  const resume = $("#scannerResume");
+  if (resume) resume.classList.toggle("hidden", !showResume);
+}
+function closeQrScanner() {
+  stopQrScanner(false);
+  $("#scannerModal").classList.add("hidden");
+  $("#scannerResult").classList.add("hidden");
+  $("#scannerVideo").classList.remove("hidden");
+  $("#scannerPlaceholder").classList.remove("hidden");
+  $("#qrImageInput").value = "";
+  pendingScannedCode = null;
+}
+function showScannedInvite(value) {
+  const code = extractPingletCode(value);
+  if (!code) {
+    setScannerStatus("That isn't a Pinglet invite QR. Try another code or enter a friend code manually.");
+    return;
+  }
+  pendingScannedCode = code;
+  stopQrScanner(false);
+  $("#scannerVideo").classList.add("hidden");
+  $("#scannerFrame").classList.add("hidden");
+  $("#scannerPlaceholder").classList.add("hidden");
+  $("#scannerFoundCode").textContent = code;
+  $("#scannerResult").classList.remove("hidden");
+  setScannerStatus("We found a Pinglet invite. Check the code, then send the friend request.");
+}
+function scanVideoFrame(timestamp) {
+  if (!qrStream) return;
+  qrFrameId = requestAnimationFrame(scanVideoFrame);
+  if (qrFrameBusy || timestamp - qrLastFrameAt < 140) return;
+  const video = $("#scannerVideo");
+  if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+  qrLastFrameAt = timestamp;
+  qrFrameBusy = true;
+  try {
+    if (window.jsQR) {
+      const canvas = $("#scannerCanvas"), context = canvas.getContext("2d", { willReadFrequently: true });
+      const scale = Math.min(1, 640 / video.videoWidth);
+      canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      const found = window.jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "dontInvert" });
+      if (found && found.data) { showScannedInvite(found.data); return; }
+    } else if (qrDetector) {
+      qrDetector.detect(video).then(codes => {
+        if (qrStream && codes.length) showScannedInvite(codes[0].rawValue);
+      }).catch(() => {});
+    }
+  } catch {}
+  finally { qrFrameBusy = false; }
+}
+async function openQrScanner() {
+  closeQrScanner();
+  $("#scannerModal").classList.remove("hidden");
+  $("#scannerResult").classList.add("hidden");
+  $("#scannerVideo").classList.remove("hidden");
+  $("#scannerFrame").classList.remove("hidden");
+  $("#scannerPlaceholder").classList.remove("hidden");
+  $("#scannerResume").classList.add("hidden");
+  $("#qrImageInput").value = "";
+  setScannerStatus("Starting your camera…");
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    setScannerStatus("Camera scanning requires a secure HTTPS browser with camera support. Upload a QR image or enter the code instead.");
+    return;
+  }
+  if (!window.jsQR) {
+    await getQrDetector();
+    if (!qrDetector) {
+      setScannerStatus("The QR reader could not load in this browser. Upload a QR image or enter the code instead.");
+      return;
+    }
+  }
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = $("#scannerVideo");
+    video.srcObject = qrStream;
+    await video.play();
+    qrTrack = qrStream.getVideoTracks()[0];
+    $("#scannerPlaceholder").classList.add("hidden");
+    const capabilities = qrTrack.getCapabilities ? qrTrack.getCapabilities() : {};
+    $("#scannerTorch").classList.toggle("hidden", !capabilities.torch);
+    setScannerStatus("Camera is ready. Hold the QR inside the frame; scanning happens only on this device.");
+    qrLastFrameAt = 0;
+    qrFrameId = requestAnimationFrame(scanVideoFrame);
+  } catch (error) {
+    stopQrScanner(false);
+    const reason = error.name === "NotAllowedError" ? "Camera permission was blocked. Allow camera access in your browser settings, or upload a QR image."
+      : error.name === "NotFoundError" ? "No camera was found on this device. Upload a QR image or enter the code."
+      : "Couldn't start the camera. Check browser permission and try again, or upload a QR image.";
+    setScannerStatus(reason);
+    $("#scannerPlaceholder").classList.remove("hidden");
+  }
+}
+async function decodeQrImage(file) {
+  if (!file) return;
+  setScannerStatus("Reading the image on this device…");
+  try {
+    let source;
+    if ("createImageBitmap" in window) source = await createImageBitmap(file);
+    else {
+      source = await new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(file);
+        image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+        image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Image could not be opened.")); };
+        image.src = url;
+      });
+    }
+    let raw = null;
+    if (window.jsQR) {
+      const canvas = $("#scannerCanvas"), context = canvas.getContext("2d", { willReadFrequently: true });
+      const scale = Math.min(1, 1600 / source.width);
+      canvas.width = Math.max(1, Math.round(source.width * scale));
+      canvas.height = Math.max(1, Math.round(source.height * scale));
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      const found = window.jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" });
+      raw = found && found.data;
+    } else {
+      await getQrDetector();
+      if (qrDetector) {
+        const found = await qrDetector.detect(source);
+        raw = found[0]?.rawValue || null;
+      }
+    }
+    if (source.close) source.close();
+    if (raw) showScannedInvite(raw);
+    else setScannerStatus("No QR code was found in that image. Try a clearer image or use the camera.");
+  } catch {
+    setScannerStatus("Couldn't read that image. Try a PNG or JPG QR image, or scan with your camera.");
+  } finally { $("#qrImageInput").value = ""; }
+}
+$("#scanQr").addEventListener("click", openQrScanner);
+$("#welcomeScan").addEventListener("click", openQrScanner);
+$("#scannerClose").addEventListener("click", closeQrScanner);
+$("#scannerModal").addEventListener("click", event => { if (event.target.id === "scannerModal") closeQrScanner(); });
+$("#scannerManual").addEventListener("click", () => {
+  closeQrScanner();
+  showAddFriendModal();
+  $("#modalInput").focus();
+});
+$("#scannerResume").addEventListener("click", openQrScanner);
+$("#scannerAgain").addEventListener("click", openQrScanner);
+$("#qrImageInput").addEventListener("change", event => decodeQrImage(event.target.files && event.target.files[0]));
+$("#scannerTorch").addEventListener("click", async () => {
+  if (!qrTrack) return;
+  try {
+    qrTorchOn = !qrTorchOn;
+    await qrTrack.applyConstraints({ advanced: [{ torch: qrTorchOn }] });
+    $("#scannerTorch").textContent = qrTorchOn ? "☼ Torch on" : "☼ Torch off";
+  } catch {
+    qrTorchOn = false;
+    toast("Torch control isn't available on this camera.");
+  }
+});
+$("#confirmScannedInvite").addEventListener("click", async () => {
+  if (!pendingScannedCode) return;
+  const button = $("#confirmScannedInvite");
+  button.disabled = true;
+  try {
+    await submitFriendCode(pendingScannedCode);
+    closeQrScanner();
+  } catch (error) { setScannerStatus(error.message); }
+  finally { button.disabled = false; }
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && qrStream) {
+    stopQrScanner(true);
+    setScannerStatus("Camera paused while Pinglet was in the background. Tap Start camera to continue.");
+  }
+});
 $("#addFriend").addEventListener("click", showAddFriendModal);
 $("#welcomeAdd").addEventListener("click", showAddFriendModal);
 $("#shareQr").addEventListener("click", showQrModal);
@@ -470,6 +694,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
     $("#modal").classList.add("hidden");
     $("#themeModal").classList.add("hidden");
+    closeQrScanner();
     $("#requests").classList.remove("mobile-open");
   }
 });
@@ -477,15 +702,8 @@ $("#modalForm").addEventListener("submit", async event => {
   event.preventDefault();
   if (event.currentTarget.dataset.kind === "label") return;
   try {
-    const data = await api("/friend-requests", { method: "POST", body: JSON.stringify({ code: $("#modalInput").value.trim().toUpperCase() }) });
+    await submitFriendCode($("#modalInput").value.trim().toUpperCase());
     $("#modal").classList.add("hidden");
-    if (data.status === "friends") {
-      await loadFriends();
-      toast("You're already friends with " + data.friend.name + ".");
-    } else {
-      await loadRequests();
-      toast("Friend request sent to " + data.friend.name + ".");
-    }
   } catch (error) { $("#modalError").textContent = error.message; }
 });
 $("#friendSearch").addEventListener("input", renderFriends);
