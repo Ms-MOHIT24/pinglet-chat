@@ -169,7 +169,7 @@ async function main() {
     assert.ok(reportAfterDelete.data.reports.some(item => item.id === report.data.reportId && item.reported_user_id === null));
     pass("Account deletion removes user data and anonymises report subject");
 
-    for (const page of ["/terms.html", "/privacy.html", "/child-safety.html", "/delete-account.html", "/delete-account.js"]) {
+    for (const page of ["/terms.html", "/privacy.html", "/child-safety.html", "/delete-account.html", "/delete-account.js", "/vendor/socket.io.js", "/vendor/jsQR.js"]) {
       const response = await fetch(base + page);
       assert.equal(response.status, 200, page + " should be publicly accessible");
     }
