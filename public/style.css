@@ -1129,3 +1129,11 @@ body[data-view="rooms"] #roomsNav>span{color:var(--accent)}
   .voice-message-player{width:min(100%,230px)}
 }
 @media(prefers-reduced-motion:reduce){.walkie-button.recording,.walkie-button.recording span{animation:none!important}}
+
+/* Direct, persistent game entry points */
+.nav-btn{ text-decoration:none; }
+.top-games,.rps-launch-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;gap:7px}
+.top-games{font-size:10px;padding:10px 13px;border-radius:11px;white-space:nowrap;background:linear-gradient(110deg,#d9fb83,#b9a3ff)}
+.rps-launch-link{font-size:11px;min-height:42px;padding:11px 16px;box-shadow:0 10px 25px rgba(185,163,255,.15)}
+.rps-launch-link:hover,.top-games:hover{filter:brightness(1.08);transform:translateY(-1px)}
+@media(max-width:700px){.top-games{display:none}.rps-launch-link{width:100%}}
