@@ -453,6 +453,7 @@ const voiceMaxBytes = 30 * 1024;
 function voiceMimeType() {
   if (!window.MediaRecorder) throw new Error("Voice recording isn't supported in this browser.");
   const choices = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  if (typeof MediaRecorder.isTypeSupported !== "function") return "";
   return choices.find(type => MediaRecorder.isTypeSupported(type)) || "";
 }
 async function beginVoiceMessage(event) {
@@ -462,10 +463,12 @@ async function beginVoiceMessage(event) {
     toast("Microphone access isn't available. Open Pinglet over HTTPS in a supported browser.");
     return;
   }
+  let recordingStream = null;
   try {
     voiceAbort = false;
     voicePointerId = event && event.pointerId !== undefined ? event.pointerId : null;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+    const stream = recordingStream;
     if (!voicePointerHeld || !peer || peer.id !== recordingPeer.id || $("#chat").classList.contains("hidden")) {
       stream.getTracks().forEach(track => track.stop());
       return;
@@ -489,7 +492,7 @@ async function beginVoiceMessage(event) {
       button.querySelector("small").textContent = "HOLD TO TALK";
       if (voiceAbort) { toast("Voice recording cancelled."); return; }
       if (blob.size < 500) { toast("That voice message was too short. Try again."); return; }
-      if (blob.size > voiceMaxBytes) { toast("That clip is too large. Keep voice messages to 8 seconds or less."); return; }
+      if (blob.size > voiceMaxBytes) { toast("That clip is too large. Try recording a shorter voice message."); return; }
       const activePeer = recordingPeer;
       if (!peer || peer.id !== activePeer.id) { toast("Voice clip discarded because you switched chats."); return; }
       button.disabled = true;
@@ -505,7 +508,7 @@ async function beginVoiceMessage(event) {
     recorder.start(250);
     setTimeout(() => { if (voiceRecorder === recorder && recorder.state === "recording") finishVoiceMessage(); }, voiceMaxDurationMs);
   } catch (error) {
-    if (voiceRecorder && voiceRecorder.stream) voiceRecorder.stream.getTracks().forEach(track => track.stop());
+    if (recordingStream) recordingStream.getTracks().forEach(track => track.stop());
     voiceRecorder = null;
     const button = $("#walkieTalkie");
     button.classList.remove("recording");
