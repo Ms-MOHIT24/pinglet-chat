@@ -74,7 +74,7 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v12"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v13"/.test(sw));
 
 
 check("Terms acceptance is required for account creation and social writes",
