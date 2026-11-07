@@ -47,7 +47,8 @@
   <div class="side-bottom">
    <button id="homeNav" class="nav-btn active" title="Chats" aria-current="page"><span>◉</span><b>Chats</b></button>
    <button id="requestsNav" class="nav-btn" aria-expanded="false" title="Friend requests"><span>✉</span><b>Requests</b><i id="requestsNavCount" class="nav-dot hidden">0</i></button>
-   <button id="gamesNav" class="nav-btn" title="Mini games"><span>✳</span><b>Play</b></button>
+   <button id="gamesNav" class="nav-btn" title="Mini games"><span>✳</span><b>Games</b></button>
+    <button id="roomsNav" class="nav-btn" title="Voice and video rooms"><span>◉</span><b>Call rooms</b></button>
    <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
    <button id="logout" class="nav-btn" title="Sign out"><span>↗</span><b>Sign out</b></button>
   </div>
@@ -68,7 +69,7 @@
     <p class="eyebrow">YOUR SPACE IS READY</p>
     <h2>Good things happen<br><em>in your own circle.</em></h2>
     <p>Bring your people a little closer. Add a friend with a code or QR invite, then keep the conversation going.</p>
-    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add a friend</button><button class="ghost" id="welcomeScan">⌗ Scan a QR</button><button class="ghost" id="welcomeShare">Share your QR ↗</button></div>
+    <div class="welcome-actions"><button class="primary" id="welcomeAdd">＋ Add a friend</button><button class="ghost" id="welcomeScan">⌗ Scan a QR</button><button class="ghost" id="welcomeShare">Share your QR ↗</button><button class="primary" id="welcomeRps">✊ Play Rock Paper Scissors</button></div>
     <div class="welcome-trust"><span>✦ Friendship-first</span><span>✦ Made for little moments</span></div>
     <div class="welcome-stats" aria-label="Your Pinglet activity">
      <div class="welcome-stat"><b id="circleStat">0</b><span>IN YOUR CIRCLE</span></div>
@@ -135,6 +136,33 @@
     <p class="snake-footnote">Keyboard: arrow keys or WASD · On mobile: use the direction pad</p>
    </div>
   </section>
+   <section id="callRooms" class="call-rooms hidden">
+    <div class="call-hero">
+     <div><p class="eyebrow">YOUR PRIVATE HANGOUT</p><h2>Call rooms</h2><p class="muted">Start a video hangout or a voice-only catch-up. Share the four-digit code with the people you want to invite.</p></div>
+     <div class="call-hero-mark" aria-hidden="true">♫</div>
+    </div>
+    <div id="callLanding" class="call-landing">
+     <div class="call-create-grid">
+      <article class="call-create-card video-create"><div class="call-create-icon">▣</div><p class="eyebrow">SEE EVERYONE</p><h3>Video room</h3><p class="muted">Talk face to face, with mic and camera controls.</p><button id="createVideoRoom" class="primary">Create video room ↗</button></article>
+      <article class="call-create-card voice-create"><div class="call-create-icon">♫</div><p class="eyebrow">JUST THE VOICES</p><h3>Voice room</h3><p class="muted">A relaxed audio-only call. Camera stays off.</p><button id="createVoiceRoom" class="primary">Create voice room ↗</button></article>
+     </div>
+     <form id="joinCallForm" class="call-join-card">
+      <div><p class="eyebrow">GOT A ROOM CODE?</p><h3>Join your people</h3><p class="muted">Enter the four digits shared by the room host.</p></div>
+      <label class="call-code-label" for="callRoomCode"><span>ROOM CODE</span><input id="callRoomCode" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4}" maxlength="4" minlength="4" placeholder="0000" aria-label="Four digit room code" required></label>
+      <button id="joinCallRoom" class="ghost" type="submit">Join room →</button>
+     </form>
+     <p class="call-footnote">Up to 4 people per room · Room codes work only while the room is active · Allow microphone/camera access when asked.</p>
+    </div>
+    <div id="callLive" class="call-live hidden">
+     <div class="call-live-heading"><div><p class="eyebrow" id="callModeLabel">LIVE VIDEO ROOM</p><h3 id="callRoomTitle">Your room is ready</h3><p id="callStatus" class="call-status" role="status" aria-live="polite">Waiting for your people…</p></div>
+      <div class="call-code-share"><span>ROOM CODE</span><strong id="activeCallCode">0000</strong><button id="copyCallCode" class="ghost" type="button">Copy code</button></div>
+     </div>
+     <div id="callGrid" class="call-grid" aria-live="polite"></div>
+     <div class="call-reactions" aria-label="Send a fun reaction"><span>React</span><button type="button" data-call-reaction="👏" aria-label="Clap">👏</button><button type="button" data-call-reaction="❤️" aria-label="Heart">❤️</button><button type="button" data-call-reaction="😂" aria-label="Laugh">😂</button><button type="button" data-call-reaction="🎉" aria-label="Celebrate">🎉</button><button type="button" data-call-reaction="🔥" aria-label="Fire">🔥</button></div>
+     <div class="call-controls"><button id="toggleMic" class="call-control active" type="button">🎙 Mic on</button><button id="toggleCamera" class="call-control active" type="button">▣ Camera on</button><button id="leaveCall" class="call-control leave" type="button">Leave room</button></div>
+     <p class="call-privacy-note">Your audio/video is sent directly between participants. Room codes are private invitations; share them only with people you know.</p>
+    </div>
+   </section>
  </section>
 </section>
 </main>
