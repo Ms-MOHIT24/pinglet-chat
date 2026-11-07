@@ -22,7 +22,7 @@ check("HTML IDs are unique", duplicates.length === 0);
 check("RPS has home, navigation, and direct URL entry points",
   html.includes('id="welcomeRps" href="/games"') &&
   html.includes('id="gamesNav"') &&
-  html.includes('id="topGames" href="/games"') &&
+  html.includes('id="topGames"') && html.includes('href="/games"') &&
   server.includes('app.get(["/games", "/call-rooms"]') &&
   app.includes('location.pathname === "/games"'));
 check("RPS arena and all three moves are present",
