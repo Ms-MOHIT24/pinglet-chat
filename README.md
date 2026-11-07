@@ -4,6 +4,8 @@ Pinglet is a browser-first social chat prototype with unique friend codes, QR in
 
 ## Current features
 
+- **Animated web and Android experience:** shared motion design for screen transitions, buttons, navigation, friend lists, chat bubbles, cards, calls and ambient backgrounds. Motion respects the device's reduced-motion setting. The Android Capacitor shell uses the hosted web app, so the same interface is shown on both platforms.
+
 - **Rock, Paper, Scissors:** animated countdown and reveal, win/loss/tie feedback, local score tracking, and a direct entry from the home screen, Games tab, or `/games`.
 - **Snake Duel:** a two-player online mini-game with server-authoritative movement.
 - **Call Rooms:** create a voice-only or video room and invite up to four participants using a four-digit code. Toggle the microphone/camera, copy the room code, use reactions, and leave the room. The direct entry is `/call-rooms`.
