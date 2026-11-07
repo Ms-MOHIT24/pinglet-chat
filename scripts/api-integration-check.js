@@ -163,7 +163,7 @@ async function main() {
 
     const createdRoom = await socketAck(aliceSocket, "call:create", { mode: "voice" });
     assert.equal(createdRoom.ok, true);
-    assert.match(createdRoom.code, /^\\d{4}$/);
+    assert.match(createdRoom.code, /^\d{4}$/);
     const participantJoined = nextSocketEvent(aliceSocket, "call:participant-joined");
     const joinedRoom = await socketAck(bobSocket, "call:join", { code: createdRoom.code });
     assert.equal(joinedRoom.ok, true);
@@ -176,7 +176,7 @@ async function main() {
     const incomingSignal = nextSocketEvent(bobSocket, "call:signal");
     aliceSocket.emit("call:signal", {
       toPeerId: bobSocket.id,
-      description: { type: "offer", sdp: "v=0\\r\\n" }
+      description: { type: "offer", sdp: "v=0\r\n" }
     });
     const signal = await incomingSignal;
     assert.equal(signal.description.type, "offer");
