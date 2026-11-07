@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 
 app.disable("x-powered-by");
 app.use(helmet({ contentSecurityPolicy: { directives: {
-  defaultSrc: ["'self'"], scriptSrc: ["'self'", "https://cdn.jsdelivr.net"], styleSrc: ["'self'", "'unsafe-inline'"],
+  defaultSrc: ["'self'"], scriptSrc: ["'self'", "https://cdn.jsdelivr.net"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
   connectSrc: ["'self'", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
   objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"]
 } } }));
