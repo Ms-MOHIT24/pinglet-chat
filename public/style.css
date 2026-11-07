@@ -1290,3 +1290,7 @@ body:before{
     transition:none!important
   }
 }
+
+
+/* Clear feedback when the chat composer has nothing ready to send. */
+.send:disabled{opacity:.42;cursor:not-allowed;filter:saturate(.55);transform:none}
