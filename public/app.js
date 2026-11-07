@@ -123,7 +123,7 @@ function setConnectionStatus(label, connected) {
   node.innerHTML = '<i></i><span>' + escapeHtml(label) + '</span>';
 }
 function show(view) {
-  ["welcome", "chat", "games"].forEach(id => $("#" + id).classList.toggle("hidden", id !== view));
+  ["welcome", "chat", "games", "callRooms"].forEach(id => $("#" + id).classList.toggle("hidden", id !== (view === "rooms" ? "callRooms" : view)));
   document.body.dataset.view = view;
   const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
   ["homeNav", "gamesNav", "roomsNav"].forEach(id => $("#" + id).classList.toggle("active", id === activeNav));
