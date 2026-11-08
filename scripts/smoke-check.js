@@ -168,6 +168,8 @@ check("Conversation history uses validated cursor pagination and a deterministic
   server.includes("Invalid message-history cursor") &&
   app.includes("messageHistory") &&
   app.includes('loadMessages({ older: true })') &&
+  app.includes('String(a.created).localeCompare(String(b.created))') &&
+  app.includes("history.refreshPending = true") &&
   html.includes('id="loadOlderMessages"') &&
   html.includes('id="messageHistoryControl"'));
 
