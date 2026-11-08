@@ -74,3 +74,14 @@ jobs:
           JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
           REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
         run: node scripts/api-integration-check.js
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify disposable database backup and restore
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_test
+          RESTORE_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_restore_check
+        run: bash scripts/verify-database-backup-restore.sh
