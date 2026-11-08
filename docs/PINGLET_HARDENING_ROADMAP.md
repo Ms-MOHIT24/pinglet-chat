@@ -63,7 +63,7 @@ This roadmap groups the agreed work into six tracks and orders them by risk. Com
 ## Track 3 — Chat and friend experience
 
 ### Work
-- [ ] Add cursor-based message-history pagination; the current history path is limited to the latest 100 messages.
+- [x] Add cursor-based message-history pagination. Merged in PR #2; GitHub Actions run #13 passed API integration coverage for 106 messages, page boundaries, tied timestamps and invalid cursors.
 - [ ] Test ordering, duplicate sends, retries, reconnects, concurrent friend requests and duplicate relationship prevention.
 - [ ] Verify that block state is enforced in REST routes, Socket.IO events, active calls and active games.
 - [ ] Review friend-code and QR invite flows for accidental exposure and unwanted contact.

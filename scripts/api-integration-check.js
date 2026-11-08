@@ -1,6 +1,6 @@
 "use strict";
 const { spawn } = require("node:child_process");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHmac } = require("node:crypto");
 const { Pool } = require("pg");
 const path = require("node:path");
 const assert = require("node:assert/strict");
@@ -11,9 +11,12 @@ const port = Number(process.env.TEST_PORT || 3187);
 const base = "http://127.0.0.1:" + port;
 const secret = process.env.JWT_SECRET || "pinglet-integration-test-secret-value-1234567890";
 const adminToken = process.env.REPORTS_ADMIN_TOKEN || "pinglet-integration-moderator-token-1234567890";
+const turnSharedSecret = "pinglet-ci-turn-shared-secret-0123456789abcdef";
+const turnTtlSeconds = 1800;
 let output = "";
 let child;
 let testPool;
+let testSuitePassed = false;
 const sockets = [];
 
 async function request(url, { method = "GET", token, body, headers = {} } = {}) {
@@ -29,9 +32,11 @@ async function request(url, { method = "GET", token, body, headers = {} } = {}) 
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data, headers: response.headers };
 }
-function connectSocket(token) {
+function connectSocket(token, origin) {
   return new Promise((resolve, reject) => {
-    const socket = createSocket(base, { auth: { token }, transports: ["websocket"], reconnection: false });
+    const options = { auth: { token }, transports: ["websocket"], reconnection: false };
+    if (origin) options.extraHeaders = { Origin: origin };
+    const socket = createSocket(base, options);
     const timeout = setTimeout(() => { socket.close(); reject(new Error("Socket connection timed out.")); }, 8000);
     socket.once("connect", () => { clearTimeout(timeout); resolve(socket); });
     socket.once("connect_error", error => { clearTimeout(timeout); socket.close(); reject(error); });
@@ -96,10 +101,14 @@ async function main() {
     cwd: root,
     env: {
       ...process.env,
+      NODE_ENV: "test",
       PORT: String(port),
       JWT_SECRET: secret,
       REPORTS_ADMIN_TOKEN: adminToken,
-      PUBLIC_URL: base,
+      TURN_URLS: "turn:turn.example.test:3478?transport=udp,turns:turn.example.test:5349?transport=tcp",
+      TURN_SHARED_SECRET: turnSharedSecret,
+      TURN_CREDENTIAL_TTL_SECONDS: String(turnTtlSeconds),
+      PUBLIC_URL: "https://pinglet-chat-staging.onrender.com",
       DATABASE_SSL: "disable"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -108,7 +117,52 @@ async function main() {
   child.stderr.on("data", chunk => { output += chunk.toString(); });
   try {
     await waitForServer();
-    pass("HTTP health check confirms PostgreSQL is reachable");
+    pass("HTTP readiness check confirms PostgreSQL is reachable");
+
+    const liveness = await request("/livez");
+    assert.equal(liveness.status, 200);
+    assert.equal(liveness.data.ok, true);
+    assert.equal(liveness.data.service, "pinglet-chat");
+    pass("Liveness probe reports process health independently of database readiness");
+
+    const readiness = await request("/readyz");
+    assert.equal(readiness.status, 200);
+    assert.equal(readiness.data.ok, true);
+    assert.equal(readiness.data.database, "connected");
+    pass("Readiness probe confirms PostgreSQL connectivity");
+
+    const healthAlias = await request("/health");
+    assert.equal(healthAlias.status, 200);
+    assert.equal(healthAlias.data.database, "connected");
+    pass("Existing Render health-check path remains a readiness alias");
+
+    const asyncFailure = await request("/api/__test/async-error");
+    assert.equal(asyncFailure.status, 500);
+    assert.equal(asyncFailure.data.error, "Something went wrong. Please try again.");
+    assert.doesNotMatch(JSON.stringify(asyncFailure.data), /integration-only error detail|stack|database/i);
+    pass("Rejected async route errors reach the sanitized central API error handler");
+
+    const malformedJson = await fetch(base + "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{"
+    });
+    assert.equal(malformedJson.status, 400);
+    const malformedJsonBody = await malformedJson.json();
+    assert.equal(malformedJsonBody.error, "Invalid request.");
+    assert.doesNotMatch(JSON.stringify(malformedJsonBody), /SyntaxError|Unexpected token|stack/i);
+    pass("Malformed JSON receives a sanitized API client error");
+
+    const tooLargeResponse = await fetch(base + "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "X".repeat(90 * 1024) })
+    });
+    assert.equal(tooLargeResponse.status, 413);
+    const tooLargeBody = await tooLargeResponse.json();
+    assert.equal(tooLargeBody.error, "Request is too large.");
+    assert.doesNotMatch(JSON.stringify(tooLargeBody), /PayloadTooLargeError|body-parser|stack/i);
+    pass("Oversized JSON receives a sanitized API client error");
 
     const consentRejected = await register("No consent", "test-password-123", false);
     assert.equal(consentRejected.status, 400);
@@ -119,7 +173,35 @@ async function main() {
     assert.ok(alice.data.token && alice.data.user.id && alice.data.user.code);
     const aliceToken = alice.data.token;
     const aliceId = alice.data.user.id;
+
+    const iceAnonymous = await request("/api/calls/ice-servers");
+    assert.equal(iceAnonymous.status, 401);
+    const iceResponse = await request("/api/calls/ice-servers", { token: aliceToken });
+    assert.equal(iceResponse.status, 200);
+    assert.equal(iceResponse.data.turnConfigured, true);
+    assert.equal(iceResponse.data.iceServers.length, 2);
+    assert.equal(iceResponse.data.iceServers[0].urls, "stun:stun.l.google.com:19302");
+    const turnServer = iceResponse.data.iceServers[1];
+    assert.deepEqual(turnServer.urls, [
+      "turn:turn.example.test:3478?transport=udp",
+      "turns:turn.example.test:5349?transport=tcp"
+    ]);
+    const [turnExpiry, turnNonce] = turnServer.username.split(":");
+    assert.match(turnNonce, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.equal(iceResponse.headers.get("cache-control"), "private, no-store");
+    assert.ok(Number(turnExpiry) >= Math.floor(Date.now() / 1000) + turnTtlSeconds - 2);
+    assert.ok(Number(turnExpiry) <= Math.floor(Date.now() / 1000) + turnTtlSeconds + 2);
+    assert.equal(turnServer.credential, createHmac("sha1", turnSharedSecret).update(turnServer.username).digest("base64"));
+    assert.ok(!JSON.stringify(iceResponse.data).includes(turnSharedSecret));
+    pass("TURN credentials are authenticated, short-lived, HMAC-derived and do not expose the shared secret");
+
     pass("Account registration stores a new account after consent");
+
+    const stagingOriginSocket = await connectSocket(aliceToken, "https://pinglet-chat-staging.onrender.com");
+    sockets.push(stagingOriginSocket);
+    pass("Socket.IO accepts the configured staging browser origin");
+    await assert.rejects(connectSocket(aliceToken, "https://pinglet-chat-live.onrender.com"));
+    pass("Socket.IO rejects the production browser origin when running as staging");
 
     const aliceMe = await request("/api/me", { token: aliceToken });
     assert.equal(aliceMe.status, 200);
@@ -203,7 +285,7 @@ async function main() {
 
 
 
-    const aliceSocket = await connectSocket(aliceToken);
+    const aliceSocket = stagingOriginSocket;
     const bobSocket = await connectSocket(bobToken);
     sockets.push(aliceSocket, bobSocket);
     pass("Authenticated Socket.IO connections work for both friends");
@@ -300,17 +382,66 @@ async function main() {
     assert.equal(cors.status, 204);
     assert.equal(cors.headers.get("access-control-allow-origin"), "https://localhost");
     pass("Capacitor Android local-origin CORS preflight works");
+
+    const stagingCors = await fetch(base + "/api/me", {
+      method: "OPTIONS",
+      headers: { Origin: "https://pinglet-chat-staging.onrender.com", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" }
+    });
+    assert.equal(stagingCors.status, 204);
+    assert.equal(stagingCors.headers.get("access-control-allow-origin"), "https://pinglet-chat-staging.onrender.com");
+
+    const productionCors = await fetch(base + "/api/me", {
+      method: "OPTIONS",
+      headers: { Origin: "https://pinglet-chat-live.onrender.com", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" }
+    });
+    assert.equal(productionCors.status, 204);
+    assert.equal(productionCors.headers.get("access-control-allow-origin"), null);
+
+    const pageResponse = await fetch(base + "/");
+    assert.equal(pageResponse.status, 200);
+    const csp = pageResponse.headers.get("content-security-policy") || "";
+    const connectDirective = csp.split(";").map(value => value.trim()).find(value => value.startsWith("connect-src ")) || "";
+    const connectSources = connectDirective.split(/\s+/).slice(1);
+    assert.ok(connectSources.includes("'self'"));
+    assert.ok(connectSources.includes("https://pinglet-chat-staging.onrender.com"));
+    assert.ok(connectSources.includes("wss://pinglet-chat-staging.onrender.com"));
+    assert.ok(!connectSources.includes("https://pinglet-chat-live.onrender.com"));
+    assert.ok(!connectSources.includes("wss://pinglet-chat-live.onrender.com"));
+    assert.ok(!connectSources.includes("ws:"));
+    assert.ok(!connectSources.includes("wss:"));
+    pass("Staging HTTP CORS and CSP allow only the configured web origin");
+    testSuitePassed = true;
   } catch (error) {
     process.stderr.write(output);
     throw error;
   } finally {
-    sockets.forEach(socket => socket.disconnect());
-    if (child && child.exitCode === null) {
-      child.kill("SIGTERM");
-      await Promise.race([
-        new Promise(resolve => child.once("exit", resolve)),
-        new Promise(resolve => setTimeout(resolve, 3000))
-      ]);
+    if (child) {
+      const activeSockets = sockets.filter(socket => socket.connected);
+      let closeResult = null;
+
+      if (child.exitCode === null && child.signalCode === null) {
+        const closeEvent = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
+        let cleanupTimer;
+        child.kill("SIGTERM");
+        closeResult = await Promise.race([
+          closeEvent,
+          new Promise(resolve => { cleanupTimer = setTimeout(() => resolve(null), 6000); })
+        ]);
+        clearTimeout(cleanupTimer);
+      } else {
+        closeResult = { code: child.exitCode, signal: child.signalCode };
+      }
+
+      if (testSuitePassed) {
+        assert.ok(closeResult, "Server should finish graceful shutdown within six seconds.");
+        assert.equal(closeResult.code, 0, "Server should exit successfully after SIGTERM.");
+        assert.equal(closeResult.signal, null, "Server should handle SIGTERM instead of being force-killed.");
+        assert.ok(activeSockets.every(socket => !socket.connected), "Server shutdown should disconnect active Socket.IO clients.");
+        assert.match(output, /Graceful shutdown complete\./);
+        pass("SIGTERM gracefully disconnects realtime clients and drains PostgreSQL");
+      } else if (!closeResult) {
+        child.kill("SIGKILL");
+      }
     }
     if (testPool) await testPool.end();
   }

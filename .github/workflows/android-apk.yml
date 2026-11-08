@@ -12,6 +12,12 @@ on:
       - "capacitor.config.json"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
+    inputs:
+      api_origin:
+        description: "Optional HTTPS API origin for an isolated staging Android preview. Leave blank for production."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: pinglet-android-${{ github.ref }}
@@ -45,7 +51,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check JavaScript syntax
-        run: node --check server.js && node --check public/app.js && node --check scripts/smoke-check.js && node --check scripts/api-integration-check.js && node --check scripts/configure-android-signing.js && node --check scripts/copy-vendor.js && node --check scripts/configure-android-permissions.js
+        run: node --check lib/origin-policy.js && node --check server.js && node --check public/app.js && node --check scripts/smoke-check.js && node --check scripts/api-integration-check.js && node --check scripts/configure-android-signing.js && node --check scripts/copy-vendor.js && node --check scripts/configure-android-permissions.js && node --check scripts/configure-runtime.js
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
@@ -62,7 +68,7 @@ jobs:
           java-version: "21"
 
       - name: Install app dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: API integration checks
         env:
@@ -71,6 +77,11 @@ jobs:
           JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
           REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
         run: node scripts/api-integration-check.js
+
+      - name: Configure runtime API origin
+        env:
+          PINGLET_API_ORIGIN: ${{ inputs.api_origin }}
+        run: npm run configure:runtime
 
       - name: Generate Android project
         run: npx cap add android
@@ -98,7 +109,7 @@ jobs:
           fi
 
       - name: Configure upload key for signed release
-        if: env.ANDROID_SIGNING_READY == 'true'
+        if: env.ANDROID_SIGNING_READY == 'true' && inputs.api_origin == ''
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -116,12 +127,12 @@ jobs:
         run: ./gradlew --no-daemon assembleDebug
 
       - name: Build signed Play Store App Bundle
-        if: env.ANDROID_SIGNING_READY == 'true'
+        if: env.ANDROID_SIGNING_READY == 'true' && inputs.api_origin == ''
         working-directory: android
         run: ./gradlew --no-daemon bundleRelease
 
       - name: Upload signed App Bundle artifact
-        if: env.ANDROID_SIGNING_READY == 'true'
+        if: env.ANDROID_SIGNING_READY == 'true' && inputs.api_origin == ''
         uses: actions/upload-artifact@v4
         with:
           name: pinglet-1.9.0-play-aab
@@ -133,11 +144,23 @@ jobs:
         if: env.ANDROID_SIGNING_READY != 'true'
         run: echo "No Android upload signing secrets configured. Built a debug preview APK only; no Play-uploadable AAB was produced."
 
-      - name: Publish APK preview
+      - name: Publish production APK preview
+        if: inputs.api_origin == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
           name: Pinglet Android Preview
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish staging APK preview
+        if: github.event_name == 'workflow_dispatch' && inputs.api_origin != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-staging
+          name: Pinglet Android Staging Preview
           prerelease: true
           make_latest: false
           overwrite_files: true

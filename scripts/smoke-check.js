@@ -11,6 +11,8 @@ const server = read("server.js");
 const css = read("public/style.css");
 const sw = read("public/sw.js");
 const packageJson = JSON.parse(read("package.json"));
+const runtimeConfigScript = read("scripts/configure-runtime.js");
+const { createOriginPolicy } = require("../lib/origin-policy");
 
 function check(label, condition) {
   assert.ok(condition, label);
@@ -127,10 +129,43 @@ check("Socket.IO and QR scanner runtimes are bundled by npm install",
 
 check("Android ships its own web UI instead of remote-loading the website",
   (!capacitor.server || !capacitor.server.url) &&
-  app.includes("const API_ORIGIN = isNativeShell ?") &&
+  app.includes("const API_ORIGIN = isNativeShell") &&
+  app.includes('configuredApiOrigin || "https://pinglet-chat-live.onrender.com"') &&
   html.includes('src="/vendor/socket.io.js" defer') &&
-  server.includes('"https://localhost"') &&
-  server.includes('"https://pinglet-chat-live.onrender.com"'));
+  server.includes("createOriginPolicy(process.env"));
+const productionOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-live.onrender.com" });
+const stagingOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-staging.onrender.com" });
+const invalidOriginPolicy = createOriginPolicy({ PUBLIC_URL: "http://pinglet-chat-staging.onrender.com" });
+const localDevOriginPolicy = createOriginPolicy({ NODE_ENV: "development", PORT: "3000" });
+check("Production and staging browser origin policies are mutually isolated",
+  productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
+  stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
+  !stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
+  invalidOriginPolicy.publicOrigin === null &&
+  localDevOriginPolicy.allowedOrigins.has("http://localhost:3000") &&
+  localDevOriginPolicy.connectSrc.includes("ws://localhost:3000") &&
+  !createOriginPolicy({ NODE_ENV: "staging", PORT: "3000" }).allowedOrigins.has("http://localhost:3000"));
+check("WebSocket CSP sources are exact to the active HTTPS origin",
+  productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-staging.onrender.com") &&
+  stagingOriginPolicy.connectSrc.includes("wss://pinglet-chat-staging.onrender.com") &&
+  !stagingOriginPolicy.connectSrc.includes("wss://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.connectSrc.includes("ws:") &&
+  !stagingOriginPolicy.connectSrc.includes("wss:"));
+check("Staging runtime config can target a separate API and generate a matching native CSP",
+  html.includes('<script src="/runtime-config.js" defer></script>') &&
+  fs.existsSync(path.join(root, "public/runtime-config.js")) &&
+  fs.existsSync(path.join(root, "scripts/configure-runtime.js")) &&
+  app.includes("window.PINGLET_CONFIG") &&
+  app.includes("configuredApiOrigin") &&
+  server.includes("createOriginPolicy(process.env)") &&
+  server.includes("allowRequest:") &&
+  server.includes("allowedOrigins.has(origin)") &&
+  !/<meta[^>]+http-equiv=["']Content-Security-Policy/i.test(html) &&
+  runtimeConfigScript.includes("Content-Security-Policy") &&
+  runtimeConfigScript.includes("connect-src"));
+
 check("Android media permissions are included in generated native project",
   fs.existsSync(path.join(root, "scripts/configure-android-permissions.js")) &&
   ["android.permission.CAMERA", "android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"].every(permission =>
@@ -172,6 +207,19 @@ check("Conversation history uses validated cursor pagination and a deterministic
   app.includes("history.refreshPending = true") &&
   html.includes('id="loadOlderMessages"') &&
   html.includes('id="messageHistoryControl"'));
+
+check("TURN credentials are minted server-side and used by WebRTC",
+  server.includes('app.get("/api/calls/ice-servers"') &&
+  server.includes('crypto.createHmac("sha1", TURN_SHARED_SECRET)') &&
+  server.includes('crypto.randomUUID()') &&
+  server.includes('Cache-Control", "private, no-store"') &&
+  app.includes('api("/calls/ice-servers")') &&
+  app.includes('data.turnConfigured !== true') &&
+  app.includes("getCallIceServers(generation)") &&
+  app.includes("new RTCPeerConnection({ iceServers })") &&
+  app.includes("callPeerPromises") &&
+  app.includes("callSessionGeneration++") &&
+  app.includes("generation !== callSessionGeneration"));
 
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&

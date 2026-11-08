@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "postinstall": "node scripts/copy-vendor.js"
+    "postinstall": "node scripts/copy-vendor.js",
+    "configure:runtime": "node scripts/configure-runtime.js"
   },
   "engines": {
     "node": "22.x"

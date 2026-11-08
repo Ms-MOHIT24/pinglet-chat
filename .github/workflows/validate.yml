@@ -12,6 +12,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "capacitor.config.json"
+      - "docs/**"
       - ".github/workflows/validate.yml"
   workflow_dispatch:
 
@@ -51,17 +52,21 @@ jobs:
           node-version: 22
 
       - name: Install app dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Check JavaScript syntax
         run: >-
+          node --check lib/origin-policy.js &&
           node --check server.js &&
           node --check public/app.js &&
           node --check scripts/smoke-check.js &&
           node --check scripts/api-integration-check.js &&
           node --check scripts/configure-android-signing.js &&
           node --check scripts/copy-vendor.js &&
-          node --check scripts/configure-android-permissions.js
+          node --check scripts/configure-android-permissions.js &&
+          node --check scripts/configure-runtime.js &&
+          node --check scripts/configure-runtime-check.js &&
+          bash -n scripts/verify-database-backup-restore.sh
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
@@ -73,3 +78,12 @@ jobs:
           JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
           REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
         run: node scripts/api-integration-check.js
+
+      - name: Verify environment-specific Android runtime and CSP generation
+        run: node scripts/configure-runtime-check.js
+
+      - name: Verify disposable database backup and restore
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_test
+          RESTORE_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_restore_check
+        run: bash scripts/verify-database-backup-restore.sh
