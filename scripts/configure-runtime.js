@@ -14,8 +14,9 @@ if (raw) {
     throw new Error("PINGLET_API_ORIGIN must be a valid HTTPS origin.");
   }
   if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
-      parsed.pathname !== "/" || parsed.search || parsed.hash) {
-    throw new Error("PINGLET_API_ORIGIN must be an HTTPS origin without credentials, path, query or fragment.");
+      parsed.pathname !== "/" || parsed.search || parsed.hash ||
+      !["pinglet-chat-live.onrender.com", "pinglet-chat-staging.onrender.com"].includes(parsed.hostname)) {
+    throw new Error("PINGLET_API_ORIGIN must be the HTTPS origin of Pinglet production or staging.");
   }
   apiOrigin = parsed.origin;
 }
