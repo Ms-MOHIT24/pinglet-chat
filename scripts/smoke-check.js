@@ -127,7 +127,8 @@ check("Socket.IO and QR scanner runtimes are bundled by npm install",
 
 check("Android ships its own web UI instead of remote-loading the website",
   (!capacitor.server || !capacitor.server.url) &&
-  app.includes("const API_ORIGIN = isNativeShell ?") &&
+  app.includes("const API_ORIGIN = isNativeShell") &&
+  app.includes('configuredApiOrigin || "https://pinglet-chat-live.onrender.com"') &&
   html.includes('src="/vendor/socket.io.js" defer') &&
   server.includes('"https://localhost"') &&
   server.includes('"https://pinglet-chat-live.onrender.com"'));
