@@ -115,6 +115,18 @@ async function main() {
     await waitForServer();
     pass("HTTP health check confirms PostgreSQL is reachable");
 
+
+
+    const consentRejected = await register("No consent", "test-password-123", false);
+    assert.equal(consentRejected.status, 400);
+    pass("Registration rejects missing Terms consent");
+
+    const alice = await register("Alice Test", "alice-password-123");
+    assert.equal(alice.status, 200);
+    assert.ok(alice.data.token && alice.data.user.id && alice.data.user.code);
+    const aliceToken = alice.data.token;
+    const aliceId = alice.data.user.id;
+
     const iceAnonymous = await request("/api/calls/ice-servers");
     assert.equal(iceAnonymous.status, 401);
     const iceResponse = await request("/api/calls/ice-servers", { token: aliceToken });
@@ -135,15 +147,6 @@ async function main() {
     assert.ok(!JSON.stringify(iceResponse.data).includes(turnSharedSecret));
     pass("TURN credentials are authenticated, short-lived, HMAC-derived and do not expose the shared secret");
 
-    const consentRejected = await register("No consent", "test-password-123", false);
-    assert.equal(consentRejected.status, 400);
-    pass("Registration rejects missing Terms consent");
-
-    const alice = await register("Alice Test", "alice-password-123");
-    assert.equal(alice.status, 200);
-    assert.ok(alice.data.token && alice.data.user.id && alice.data.user.code);
-    const aliceToken = alice.data.token;
-    const aliceId = alice.data.user.id;
     pass("Account registration stores a new account after consent");
 
     const aliceMe = await request("/api/me", { token: aliceToken });
