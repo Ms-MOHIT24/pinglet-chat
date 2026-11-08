@@ -103,7 +103,9 @@ Minimum staging environment:
 - `NODE_ENV=staging` (never `test` in an internet-accessible service);
 - no real users; use disposable test accounts and messages only.
 
-The application now adds the configured `PUBLIC_URL` HTTPS origin to its CORS/Socket.IO allowlist. Browser staging uses the same-origin API. A staging Android preview can be built through the Android workflow's manual `api_origin` input. That build is published under a separate `android-staging` preview tag; it must never overwrite the production preview or create a Play Store AAB. Confirm the configured origin is the staging service before running that workflow.
+The application now adds the configured `PUBLIC_URL` HTTPS origin to its CORS/Socket.IO allowlist. Browser staging uses the same-origin API. CORS and Content Security Policy explicitly allow Pinglet's production and staging Render origins; do not widen them to all external hosts. The native runtime configuration script accepts only those two Pinglet origins. A staging Android preview can be built through the Android workflow's manual `api_origin` input. That build is published under a separate `android-staging` preview tag; it must never overwrite the production preview or create a Play Store AAB. Confirm the configured origin is the staging service before running that workflow.
+
+GitHub CI also runs a disposable localhost-only PostgreSQL custom-format backup/restore check. It dumps the CI database, verifies the archive, restores to a separate CI database, compares core table counts, and drops the scratch database. This proves the automated test workflow can restore its own disposable database; it is not a production backup and does not replace the adult operator's provider backup and isolated production restore evidence.
 
 Staging acceptance should include:
 - clean sign-up/login and terms acceptance with two disposable accounts;
