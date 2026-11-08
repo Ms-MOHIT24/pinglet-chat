@@ -153,4 +153,12 @@ check("Remote call tiles offer accessible report and block actions",
   app.includes("person.userId") &&
   app.includes("reportTarget = { id: target.id, name: target.name"));
 
+check("Dialogs expose managed focus, Escape and screen-reader state",
+  app.includes("function setupModalAccessibility") &&
+  app.includes("aria-modal") &&
+  app.includes("aria-hidden") &&
+  app.includes("focusRestore") &&
+  app.includes('event.key === "Escape"') &&
+  app.includes('event.key !== "Tab"'));
+
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
