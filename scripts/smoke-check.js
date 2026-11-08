@@ -13,6 +13,7 @@ const sw = read("public/sw.js");
 const packageJson = JSON.parse(read("package.json"));
 const runtimeConfigScript = read("scripts/configure-runtime.js");
 const { createOriginPolicy } = require("../lib/origin-policy");
+const { isValidTurnUrl } = require("../lib/turn-url");
 
 function check(label, condition) {
   assert.ok(condition, label);
@@ -220,6 +221,28 @@ check("TURN credentials are minted server-side and used by WebRTC",
   app.includes("callPeerPromises") &&
   app.includes("callSessionGeneration++") &&
   app.includes("generation !== callSessionGeneration"));
+
+check("Failed WebRTC peer setup closes and removes the partial peer before retry",
+  app.includes("const failedPeer = callPeers.get(peerId)") &&
+  app.includes("failedPeer.pc.close()") &&
+  app.includes("callPeers.delete(peerId)") &&
+  app.includes("entry.tile.remove()"));
+
+check("TURN URI validation rejects credentials, malformed hosts, ports and parameters",
+  isValidTurnUrl("turn:turn.example.com:3478?transport=udp") &&
+  isValidTurnUrl("turns:turn.example.com:5349?transport=tcp") &&
+  isValidTurnUrl("turn:[2001:db8::1]:3478") &&
+  !isValidTurnUrl("turn:user:pass@turn.example.com:3478") &&
+  !isValidTurnUrl("turn:turn.example.com:70000") &&
+  !isValidTurnUrl("turn:turn..example.com:3478") &&
+  !isValidTurnUrl("turn:turn.example.com:3478?transport=udp&secret=x") &&
+  !isValidTurnUrl("turn:turn.example.com/path"));
+
+check("Database restore rehearsal is restricted to the GitHub CI fixture databases",
+  read("scripts/verify-database-backup-restore.sh").includes('os.environ.get("GITHUB_ACTIONS") != "true"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('source_db != "pinglet_test"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('target_db != "pinglet_restore_check"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('source.port != 5432'));
 
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&
