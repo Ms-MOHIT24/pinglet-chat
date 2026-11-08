@@ -83,7 +83,7 @@ A separate corrective branch, `fix/pinglet-post-merge-review-2026-11-09`, addres
 - add regression checks for the above;
 - trigger main validation and Android preview workflows when `lib/**` changes.
 
-These fixes are not yet merged or deployed. Their CI result must be checked before review/merge.
+These fixes are in draft PR #6 and are not merged or deployed. GitHub Actions validation run [#63](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42517745384) passed on exact PR head `943557f85ae060248b3edc36565f41bef52f3dcd`, including syntax, smoke, PostgreSQL API integration, Android runtime/CSP checks and the CI-only backup/restore rehearsal. This is CI evidence only; independent human review and an Android preview build of the corrective branch are still outstanding.
 
 ## Safe test instructions
 
