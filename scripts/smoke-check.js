@@ -138,7 +138,11 @@ check("Staging runtime config can target a separate API without changing product
   app.includes("window.PINGLET_CONFIG") &&
   app.includes("configuredApiOrigin") &&
   server.includes("configuredPublicOrigin") &&
-  server.includes("allowedOrigins.has(origin)"));
+  server.includes("allowedOrigins.has(origin)") &&
+  html.includes("https://pinglet-chat-staging.onrender.com") &&
+  html.includes("wss://pinglet-chat-staging.onrender.com") &&
+  server.includes("https://pinglet-chat-staging.onrender.com") &&
+  server.includes("wss://pinglet-chat-staging.onrender.com"));
 
 check("Android media permissions are included in generated native project",
   fs.existsSync(path.join(root, "scripts/configure-android-permissions.js")) &&
