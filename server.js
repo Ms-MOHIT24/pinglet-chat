@@ -15,6 +15,28 @@ const SECRET = process.env.JWT_SECRET;
 if (!SECRET || Buffer.byteLength(SECRET) < 32) throw new Error("JWT_SECRET must contain at least 32 random bytes.");
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const app = express();
+
+// Express 4 does not automatically forward rejected promises from async route
+// handlers. Wrap route callbacks at registration time so all async failures
+// reach the central error handler below instead of becoming unhandled rejections.
+function wrapRouteHandler(handler) {
+  if (typeof handler !== "function" || handler.length === 4) return handler;
+  return function wrappedRouteHandler(req, res, next) {
+    try {
+      return Promise.resolve(handler(req, res, next)).catch(next);
+    } catch (error) {
+      return next(error);
+    }
+  };
+}
+for (const method of ["get", "post", "put", "patch", "delete", "options", "head"]) {
+  const registerRoute = app[method].bind(app);
+  app[method] = (routePath, ...handlers) => registerRoute(
+    routePath,
+    ...handlers.map(handler => Array.isArray(handler) ? handler.map(wrapRouteHandler) : wrapRouteHandler(handler))
+  );
+}
+
 app.set("trust proxy", 1);
 const server = http.createServer(app);
 const capacitorOrigins = [
@@ -665,10 +687,44 @@ app.use(express.static(publicDir, {
 }));
 app.get("/", (req, res) => res.sendFile(path.join(publicDir, "index.html")));
 app.get(["/games", "/call-rooms"], (req, res) => res.sendFile(path.join(publicDir, "index.html")));
+if (process.env.NODE_ENV === "test") {
+  app.get("/api/__test/async-error", async () => {
+    throw new Error("integration-only error detail");
+  });
+}
+
 app.get("/invite/:code", (req, res) => {
   if (!/^[a-f0-9]{14}$/i.test(req.params.code)) return res.status(404).send("Invite not found.");
   res.sendFile(path.join(publicDir, "index.html"));
 });
+// Centralized request error handling. Never return raw database, parser or stack details.
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+
+  const candidateStatus = Number(error && (error.statusCode || error.status));
+  const status = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus < 500
+    ? candidateStatus
+    : 500;
+
+  if (status >= 500) {
+    console.error("Unhandled request error:", {
+      name: error && typeof error.name === "string" ? error.name : "Error",
+      method: req.method,
+      path: req.path
+    });
+  }
+
+  let message = "Request could not be completed.";
+  if (status === 400) message = "Invalid request.";
+  else if (status === 413) message = "Request is too large.";
+  else if (status >= 500) message = "Something went wrong. Please try again.";
+
+  if (req.path === "/api" || req.path.startsWith("/api/")) {
+    return res.status(status).json({ error: message });
+  }
+  return res.status(status).type("text/plain").send(message);
+});
+
 app.use("/api", (req, res) => res.status(404).json({ error: "API endpoint not found." }));
 app.use((req, res) => res.status(404).type("text/plain").send("Page not found."));
 initializeDatabase().then(async()=>{await cacheNames();server.listen(PORT,"0.0.0.0",()=>console.log("Pinglet listening on port "+PORT));})
