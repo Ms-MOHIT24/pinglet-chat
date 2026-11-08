@@ -1,6 +1,6 @@
 "use strict";
 const { spawn } = require("node:child_process");
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHmac } = require("node:crypto");
 const { Pool } = require("pg");
 const path = require("node:path");
 const assert = require("node:assert/strict");
@@ -11,6 +11,8 @@ const port = Number(process.env.TEST_PORT || 3187);
 const base = "http://127.0.0.1:" + port;
 const secret = process.env.JWT_SECRET || "pinglet-integration-test-secret-value-1234567890";
 const adminToken = process.env.REPORTS_ADMIN_TOKEN || "pinglet-integration-moderator-token-1234567890";
+const turnSharedSecret = "pinglet-ci-turn-shared-secret-0123456789abcdef";
+const turnTtlSeconds = 1800;
 let output = "";
 let child;
 let testPool;
@@ -102,6 +104,9 @@ async function main() {
       PORT: String(port),
       JWT_SECRET: secret,
       REPORTS_ADMIN_TOKEN: adminToken,
+      TURN_URLS: "turn:turn.example.test:3478?transport=udp,turns:turn.example.test:5349?transport=tcp",
+      TURN_SHARED_SECRET: turnSharedSecret,
+      TURN_CREDENTIAL_TTL_SECONDS: String(turnTtlSeconds),
       PUBLIC_URL: "https://pinglet-chat-staging.onrender.com",
       DATABASE_SSL: "disable"
     },
@@ -150,6 +155,28 @@ async function main() {
     assert.ok(alice.data.token && alice.data.user.id && alice.data.user.code);
     const aliceToken = alice.data.token;
     const aliceId = alice.data.user.id;
+
+    const iceAnonymous = await request("/api/calls/ice-servers");
+    assert.equal(iceAnonymous.status, 401);
+    const iceResponse = await request("/api/calls/ice-servers", { token: aliceToken });
+    assert.equal(iceResponse.status, 200);
+    assert.equal(iceResponse.data.turnConfigured, true);
+    assert.equal(iceResponse.data.iceServers.length, 2);
+    assert.equal(iceResponse.data.iceServers[0].urls, "stun:stun.l.google.com:19302");
+    const turnServer = iceResponse.data.iceServers[1];
+    assert.deepEqual(turnServer.urls, [
+      "turn:turn.example.test:3478?transport=udp",
+      "turns:turn.example.test:5349?transport=tcp"
+    ]);
+    const [turnExpiry, turnNonce] = turnServer.username.split(":");
+    assert.match(turnNonce, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.equal(iceResponse.headers.get("cache-control"), "private, no-store");
+    assert.ok(Number(turnExpiry) >= Math.floor(Date.now() / 1000) + turnTtlSeconds - 2);
+    assert.ok(Number(turnExpiry) <= Math.floor(Date.now() / 1000) + turnTtlSeconds + 2);
+    assert.equal(turnServer.credential, createHmac("sha1", turnSharedSecret).update(turnServer.username).digest("base64"));
+    assert.ok(!JSON.stringify(iceResponse.data).includes(turnSharedSecret));
+    pass("TURN credentials are authenticated, short-lived, HMAC-derived and do not expose the shared secret");
+
     pass("Account registration stores a new account after consent");
 
     const stagingOriginSocket = await connectSocket(aliceToken, "https://pinglet-chat-staging.onrender.com");

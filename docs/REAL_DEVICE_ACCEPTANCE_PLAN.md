@@ -76,7 +76,7 @@ For every case, record: **Pass / Fail / Blocked / Not run**, device, Android ver
 - [ ] Switch conversations with unsent drafts and confirm each draft stays with the correct test conversation.
 - [ ] Submit empty/whitespace-only content and confirm no empty message is sent.
 - [ ] Reconnect during a conversation and verify history is ordered and messages are not duplicated.
-- [ ] Scroll through history beyond 100 test messages once cursor pagination is implemented; verify older messages load without gaps or repeats.
+- [ ] On physical Android devices, scroll through history beyond 100 test messages and verify older messages load without gaps or repeats. The API pagination boundary test passed in CI; device-level behavior remains untested.
 - [ ] Record and send an allowed short voice clip after granting microphone access.
 - [ ] Deny microphone access and confirm the app explains the limitation without hanging.
 - [ ] Confirm leaving the chat or signing out stops recording/playback and releases media resources.
