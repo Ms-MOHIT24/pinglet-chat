@@ -39,21 +39,32 @@ for (const method of ["get", "post", "put", "patch", "delete", "options", "head"
 
 app.set("trust proxy", 1);
 const server = http.createServer(app);
-const capacitorOrigins = [
+const configuredPublicOrigin = (() => {
+  try {
+    const value = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
+    if (!value) return null;
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
+})();
+const allowedOrigins = new Set([
   "capacitor://localhost",
   "ionic://localhost",
   "https://localhost",
   "http://localhost",
-  "https://pinglet-chat-live.onrender.com"
-];
-const io = new Server(server, { cors: { origin: capacitorOrigins } });
+  "https://pinglet-chat-live.onrender.com",
+  ...(configuredPublicOrigin ? [configuredPublicOrigin] : [])
+]);
+const io = new Server(server, { cors: { origin: [...allowedOrigins] } });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
 const PORT = process.env.PORT || 3000;
 
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && capacitorOrigins.includes(origin)) {
+  if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
