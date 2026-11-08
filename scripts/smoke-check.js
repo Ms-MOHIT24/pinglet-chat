@@ -146,4 +146,11 @@ check("Call rooms require a saved, non-blocked friendship",
   server.includes("removeBlockedPairFromCalls") &&
   server.includes("if (await areBlockedEither(sender.userId, recipient.userId)) return"));
 
+check("Remote call tiles offer accessible report and block actions",
+  app.includes("function addCallSafetyActions") &&
+  app.includes("function blockCallParticipant") &&
+  app.includes('openReportModal("Reported from a live call."') &&
+  app.includes("person.userId") &&
+  app.includes("reportTarget = { id: target.id, name: target.name"));
+
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");
