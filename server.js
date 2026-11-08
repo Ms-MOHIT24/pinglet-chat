@@ -10,6 +10,7 @@ const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const crypto = require("crypto");
 const path = require("path");
+const { createOriginPolicy } = require("./lib/origin-policy");
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET || Buffer.byteLength(SECRET) < 32) throw new Error("JWT_SECRET must contain at least 32 random bytes.");
@@ -39,25 +40,16 @@ for (const method of ["get", "post", "put", "patch", "delete", "options", "head"
 
 app.set("trust proxy", 1);
 const server = http.createServer(app);
-const configuredPublicOrigin = (() => {
-  try {
-    const value = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL;
-    if (!value) return null;
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.origin : null;
-  } catch {
-    return null;
+const { allowedOrigins, connectSrc } = createOriginPolicy(process.env);
+const io = new Server(server, {
+  cors: { origin: [...allowedOrigins] },
+  // Socket.IO's CORS option governs HTTP polling. Check the Origin header
+  // here as well so browser WebSocket handshakes use the same exact allowlist.
+  allowRequest: (req, callback) => {
+    const origin = req.headers.origin;
+    callback(null, !origin || allowedOrigins.has(origin));
   }
-})();
-const allowedOrigins = new Set([
-  "capacitor://localhost",
-  "ionic://localhost",
-  "https://localhost",
-  "http://localhost",
-  "https://pinglet-chat-live.onrender.com",
-  ...(configuredPublicOrigin ? [configuredPublicOrigin] : [])
-]);
-const io = new Server(server, { cors: { origin: [...allowedOrigins] } });
+});
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
 const PORT = process.env.PORT || 3000;
 
@@ -75,7 +67,7 @@ app.use((req, res, next) => {
 });
 app.use(helmet({ contentSecurityPolicy: { directives: {
   defaultSrc: ["'self'"], scriptSrc: ["'self'"], mediaSrc: ["'self'", "blob:"], styleSrc: ["'self'", "'unsafe-inline'"],
-  connectSrc: ["'self'", "https://pinglet-chat-live.onrender.com", "wss://pinglet-chat-live.onrender.com", "https://pinglet-chat-staging.onrender.com", "wss://pinglet-chat-staging.onrender.com", "ws:", "wss:"], imgSrc: ["'self'", "data:"],
+  connectSrc, imgSrc: ["'self'", "data:"],
   objectSrc: ["'none'"], baseUri: ["'self'"], frameAncestors: ["'none'"]
 } } }));
 app.use(express.json({ limit: "80kb" }));
