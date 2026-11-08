@@ -173,6 +173,14 @@ check("Conversation history uses validated cursor pagination and a deterministic
   html.includes('id="loadOlderMessages"') &&
   html.includes('id="messageHistoryControl"'));
 
+check("TURN credentials are minted server-side and used by WebRTC",
+  server.includes('app.get("/api/calls/ice-servers"') &&
+  server.includes('crypto.createHmac("sha1", TURN_SHARED_SECRET)') &&
+  server.includes('Cache-Control", "private, no-store"') &&
+  app.includes('api("/calls/ice-servers")') &&
+  app.includes("new RTCPeerConnection({ iceServers })") &&
+  app.includes("callPeerPromises"));
+
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&
   html.includes("Voice-message audio is not attached"));
