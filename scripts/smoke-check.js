@@ -11,6 +11,8 @@ const server = read("server.js");
 const css = read("public/style.css");
 const sw = read("public/sw.js");
 const packageJson = JSON.parse(read("package.json"));
+const runtimeConfigScript = read("scripts/configure-runtime.js");
+const { createOriginPolicy } = require("../lib/origin-policy");
 
 function check(label, condition) {
   assert.ok(condition, label);
@@ -132,18 +134,34 @@ check("Android ships its own web UI instead of remote-loading the website",
   html.includes('src="/vendor/socket.io.js" defer') &&
   server.includes('"https://localhost"') &&
   server.includes('"https://pinglet-chat-live.onrender.com"'));
-check("Staging runtime config can target a separate API without changing production defaults",
+const productionOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-live.onrender.com" });
+const stagingOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-staging.onrender.com" });
+const invalidOriginPolicy = createOriginPolicy({ PUBLIC_URL: "http://pinglet-chat-staging.onrender.com" });
+check("Production and staging browser origin policies are mutually isolated",
+  productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
+  stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
+  !stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
+  invalidOriginPolicy.publicOrigin === null);
+check("WebSocket CSP sources are exact to the active HTTPS origin",
+  productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-staging.onrender.com") &&
+  stagingOriginPolicy.connectSrc.includes("wss://pinglet-chat-staging.onrender.com") &&
+  !stagingOriginPolicy.connectSrc.includes("wss://pinglet-chat-live.onrender.com") &&
+  !productionOriginPolicy.connectSrc.includes("ws:") &&
+  !stagingOriginPolicy.connectSrc.includes("wss:"));
+check("Staging runtime config can target a separate API and generate a matching native CSP",
   html.includes('<script src="/runtime-config.js" defer></script>') &&
   fs.existsSync(path.join(root, "public/runtime-config.js")) &&
   fs.existsSync(path.join(root, "scripts/configure-runtime.js")) &&
   app.includes("window.PINGLET_CONFIG") &&
   app.includes("configuredApiOrigin") &&
-  server.includes("configuredPublicOrigin") &&
+  server.includes("createOriginPolicy(process.env)") &&
+  server.includes("allowRequest:") &&
   server.includes("allowedOrigins.has(origin)") &&
-  html.includes("https://pinglet-chat-staging.onrender.com") &&
-  html.includes("wss://pinglet-chat-staging.onrender.com") &&
-  server.includes("https://pinglet-chat-staging.onrender.com") &&
-  server.includes("wss://pinglet-chat-staging.onrender.com"));
+  !/<meta[^>]+http-equiv=["']Content-Security-Policy/i.test(html) &&
+  runtimeConfigScript.includes("Content-Security-Policy") &&
+  runtimeConfigScript.includes("connect-src"));
 
 check("Android media permissions are included in generated native project",
   fs.existsSync(path.join(root, "scripts/configure-android-permissions.js")) &&
