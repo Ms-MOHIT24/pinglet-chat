@@ -33,38 +33,38 @@ backup_dir="$(mktemp -d)"
 trap 'rm -rf "$backup_dir"' EXIT
 
 # Use client tools from the same PostgreSQL major image as the CI service.
-# This avoids pg_dump/pg_restore version-specific session settings.
 docker run --rm --network host \
   --env DATABASE_URL \
   --env RESTORE_DATABASE_URL \
   --volume "$backup_dir:/backup" \
-  postgres:16 bash -euo pipefail -c '
-    set +x
-    backup_file="/backup/pinglet-ci.dump"
-    restore_db="pinglet_restore_check"
-    cleanup() {
-      psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $restore_db WITH (FORCE)" >/dev/null 2>&1 || true
-    }
-    trap cleanup EXIT
+  postgres:16 bash -s <<'CONTAINER_SCRIPT'
+set -euo pipefail
+set +x
+backup_file="/backup/pinglet-ci.dump"
+restore_db="pinglet_restore_check"
+cleanup() {
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $restore_db WITH (FORCE)" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
-    pg_dump --format=custom --no-owner --no-acl --file="$backup_file" "$DATABASE_URL"
-    test -s "$backup_file"
-    pg_restore --list "$backup_file" > /backup/archive-contents.txt
-    test -s /backup/archive-contents.txt
+pg_dump --format=custom --no-owner --no-acl --file="$backup_file" "$DATABASE_URL"
+test -s "$backup_file"
+pg_restore --list "$backup_file" > /backup/archive-contents.txt
+test -s /backup/archive-contents.txt
 
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $restore_db WITH (FORCE)" >/dev/null
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $restore_db" >/dev/null
-    pg_restore --exit-on-error --single-transaction --no-owner --no-acl --dbname="$RESTORE_DATABASE_URL" "$backup_file"
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS $restore_db WITH (FORCE)" >/dev/null
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE $restore_db" >/dev/null
+pg_restore --exit-on-error --single-transaction --no-owner --no-acl --dbname="$RESTORE_DATABASE_URL" "$backup_file"
 
-    count_query="SELECT format('users=%s;messages=%s;friendships=%s;friend_requests=%s;blocked_users=%s;reports=%s', (SELECT count(*) FROM users), (SELECT count(*) FROM messages), (SELECT count(*) FROM friendships), (SELECT count(*) FROM friend_requests), (SELECT count(*) FROM blocked_users), (SELECT count(*) FROM reports));"
-    source_counts="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "$count_query")"
-    restored_counts="$(psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "$count_query")"
-    if [[ "$source_counts" != "$restored_counts" ]]; then
-      echo "Restored database counts do not match the source database."
-      exit 1
-    fi
+count_query="SELECT (SELECT count(*) FROM users)::text || ':' || (SELECT count(*) FROM messages)::text || ':' || (SELECT count(*) FROM friendships)::text || ':' || (SELECT count(*) FROM friend_requests)::text || ':' || (SELECT count(*) FROM blocked_users)::text || ':' || (SELECT count(*) FROM reports)::text;"
+source_counts="$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "$count_query")"
+restored_counts="$(psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "$count_query")"
+if [[ "$source_counts" != "$restored_counts" ]]; then
+  echo "Restored database counts do not match the source database."
+  exit 1
+fi
 
-    echo "PASS  PostgreSQL custom-format backup archive is readable"
-    echo "PASS  Backup restored into a separate disposable localhost database"
-    echo "PASS  Core table counts match between source and restored databases"
-  '
+echo "PASS  PostgreSQL custom-format backup archive is readable"
+echo "PASS  Backup restored into a separate disposable localhost database"
+echo "PASS  Core table counts match between source and restored databases"
+CONTAINER_SCRIPT
