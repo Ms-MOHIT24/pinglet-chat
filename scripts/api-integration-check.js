@@ -356,7 +356,7 @@ async function main() {
     assert.equal(pageResponse.status, 200);
     const csp = pageResponse.headers.get("content-security-policy") || "";
     const connectDirective = csp.split(";").map(value => value.trim()).find(value => value.startsWith("connect-src ")) || "";
-    const connectSources = connectDirective.split(/\\s+/).slice(1);
+    const connectSources = connectDirective.split(/\s+/).slice(1);
     assert.ok(connectSources.includes("'self'"));
     assert.ok(connectSources.includes("https://pinglet-chat-staging.onrender.com"));
     assert.ok(connectSources.includes("wss://pinglet-chat-staging.onrender.com"));
