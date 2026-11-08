@@ -17,7 +17,7 @@ if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("CI") != "true":
 source = urlparse(os.environ["DATABASE_URL"])
 target = urlparse(os.environ["RESTORE_DATABASE_URL"])
 source_db = source.path.lstrip("/").split("/", 1)[0]
-target_db = target.path.lstrip("/", 1)[0]
+target_db = target.path.lstrip("/").split("/", 1)[0]
 
 if source.scheme not in {"postgres", "postgresql"} or target.scheme not in {"postgres", "postgresql"}:
     raise SystemExit("Backup verification requires PostgreSQL connection URLs.")
