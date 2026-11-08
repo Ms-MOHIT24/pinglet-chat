@@ -65,10 +65,17 @@ verifyGeneratedPolicy(productionOrigin, productionOrigin, "Production Android ru
 verifyGeneratedPolicy(stagingOrigin, stagingOrigin, "Staging Android runtime");
 verifyGeneratedPolicy(undefined, productionOrigin, "Default Android runtime");
 
-const invalid = createWorkspace("http://pinglet-chat-staging.onrender.com");
-try {
-  assert.notEqual(invalid.result.status, 0, "invalid HTTP API origin must be rejected");
-  process.stdout.write("PASS  Invalid non-HTTPS Android API origins are rejected\n");
-} finally {
-  fs.rmSync(invalid.root, { recursive: true, force: true });
+for (const [invalidOrigin, label] of [
+  ["http://pinglet-chat-staging.onrender.com", "non-HTTPS origin"],
+  ["https://pinglet-chat-staging.onrender.com:444", "non-default HTTPS port"],
+  ["https://example.com", "unapproved hostname"],
+  ["https://user:pass@pinglet-chat-live.onrender.com", "embedded URL credentials"]
+]) {
+  const invalid = createWorkspace(invalidOrigin);
+  try {
+    assert.notEqual(invalid.result.status, 0, label + " must be rejected");
+    process.stdout.write("PASS  Invalid Android API " + label + " is rejected\\n");
+  } finally {
+    fs.rmSync(invalid.root, { recursive: true, force: true });
+  }
 }
