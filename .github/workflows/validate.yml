@@ -56,6 +56,7 @@ jobs:
 
       - name: Check JavaScript syntax
         run: >-
+          node --check lib/origin-policy.js &&
           node --check server.js &&
           node --check public/app.js &&
           node --check scripts/smoke-check.js &&
