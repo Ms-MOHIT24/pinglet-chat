@@ -33,7 +33,7 @@ const TURN_CREDENTIAL_TTL_SECONDS = Number(process.env.TURN_CREDENTIAL_TTL_SECON
 const TURN_CONFIGURED =
   TURN_URLS.length > 0 &&
   TURN_URLS.length <= 8 &&
-  TURN_URLS.every(value => /^turns?:/i.test(value) && value.length <= 512 && !/\\s/.test(value)) &&
+  TURN_URLS.every(value => /^turns?:/i.test(value) && value.length <= 512 && !/\s/.test(value)) &&
   Buffer.byteLength(TURN_SHARED_SECRET) >= 32 &&
   Number.isInteger(TURN_CREDENTIAL_TTL_SECONDS) &&
   TURN_CREDENTIAL_TTL_SECONDS >= 300 &&
