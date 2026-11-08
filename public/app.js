@@ -9,7 +9,7 @@ let messageSending = false;
 const messageDrafts = new Map();
 let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
-let callIceServersPromise = null, callPeerPromises = new Map();
+let callIceServersPromise = null, callPeerPromises = new Map(), callSessionGeneration = 0;
 let reportTarget = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
 let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
@@ -1602,9 +1602,10 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
     return pending;
   }
 
+  const generation = callSessionGeneration;
   const creation = (async () => {
     const iceServers = await getCallIceServers();
-    if (!callCode || !callStream) return null;
+    if (generation !== callSessionGeneration || !callCode || !callStream) return null;
     if (callPeers.has(peerId)) return callPeers.get(peerId);
 
     const entry = addCallTile(peerId, peerName, false, userId);
@@ -1613,11 +1614,15 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
     callPeers.set(peerId, peer);
     callStream.getTracks().forEach(track => pc.addTrack(track, callStream));
     pc.onicecandidate = event => {
-      if (event.candidate && socket && socket.connected) {
+      if (generation === callSessionGeneration && callCode && event.candidate && socket && socket.connected) {
         socket.emit("call:signal", { toPeerId: peerId, candidate: event.candidate });
       }
     };
     pc.ontrack = event => {
+      if (generation !== callSessionGeneration || !callCode) {
+        event.track.stop();
+        return;
+      }
       const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
       entry.media.srcObject = stream;
       if (callMode === "video" && stream.getVideoTracks().length) {
@@ -1630,13 +1635,19 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
       entry.media.play().catch(() => setCallStatus("Tap the page once to enable call audio."));
     };
     pc.onconnectionstatechange = () => {
+      if (generation !== callSessionGeneration || !callCode) return;
       if (pc.connectionState === "failed") setCallStatus("Connection failed for " + peerName + ". Check the network and rejoin.");
       else if (pc.connectionState === "connected") setCallStatus(peerName + " is connected · " + (1 + callPeers.size) + "/4 here");
     };
     if (initiator) {
       const offer = await pc.createOffer();
+      if (generation !== callSessionGeneration || !callCode) {
+        pc.close();
+        if (callPeers.get(peerId) === peer) callPeers.delete(peerId);
+        return null;
+      }
       await pc.setLocalDescription(offer);
-      if (callCode && socket && socket.connected) {
+      if (generation === callSessionGeneration && callCode && socket && socket.connected) {
         socket.emit("call:signal", { toPeerId: peerId, description: pc.localDescription });
       }
     }
@@ -1647,12 +1658,14 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
   try {
     return await creation;
   } catch (error) {
-    const pending = callPeerPromises.get(peerId);
-    if (pending === creation) callPeerPromises.delete(peerId);
-    const entry = callTiles.get(peerId);
-    if (!callPeers.has(peerId) && entry) {
-      entry.tile.remove();
-      callTiles.delete(peerId);
+    if (generation === callSessionGeneration) {
+      const pending = callPeerPromises.get(peerId);
+      if (pending === creation) callPeerPromises.delete(peerId);
+      const entry = callTiles.get(peerId);
+      if (!callPeers.has(peerId) && entry) {
+        entry.tile.remove();
+        callTiles.delete(peerId);
+      }
     }
     throw error;
   } finally {
@@ -1699,6 +1712,7 @@ function showCallReaction(payload) {
   setTimeout(() => burst.remove(), 1500);
 }
 function resetCallUi() {
+  callSessionGeneration++;
   callPeers.forEach(peer => peer.pc.close());
   callPeers.clear();
   callPeerPromises.clear();
