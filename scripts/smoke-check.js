@@ -179,7 +179,9 @@ check("TURN credentials are minted server-side and used by WebRTC",
   server.includes('Cache-Control", "private, no-store"') &&
   app.includes('api("/calls/ice-servers")') &&
   app.includes("new RTCPeerConnection({ iceServers })") &&
-  app.includes("callPeerPromises"));
+  app.includes("callPeerPromises") &&
+  app.includes("callSessionGeneration++") &&
+  app.includes("generation !== callSessionGeneration"));
 
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&
