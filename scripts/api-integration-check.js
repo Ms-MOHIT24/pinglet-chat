@@ -100,7 +100,7 @@ async function main() {
       PORT: String(port),
       JWT_SECRET: secret,
       REPORTS_ADMIN_TOKEN: adminToken,
-      PUBLIC_URL: base,
+      PUBLIC_URL: "https://pinglet-chat-staging.onrender.com",
       DATABASE_SSL: "disable"
     },
     stdio: ["ignore", "pipe", "pipe"]
@@ -127,6 +127,17 @@ async function main() {
     assert.equal(malformedJsonBody.error, "Invalid request.");
     assert.doesNotMatch(JSON.stringify(malformedJsonBody), /SyntaxError|Unexpected token|stack/i);
     pass("Malformed JSON receives a sanitized API client error");
+
+    const tooLargeResponse = await fetch(base + "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "X".repeat(90 * 1024) })
+    });
+    assert.equal(tooLargeResponse.status, 413);
+    const tooLargeBody = await tooLargeResponse.json();
+    assert.equal(tooLargeBody.error, "Request is too large.");
+    assert.doesNotMatch(JSON.stringify(tooLargeBody), /PayloadTooLargeError|body-parser|stack/i);
+    pass("Oversized JSON receives a sanitized API client error");
 
     const consentRejected = await register("No consent", "test-password-123", false);
     assert.equal(consentRejected.status, 400);
@@ -318,6 +329,14 @@ async function main() {
     assert.equal(cors.status, 204);
     assert.equal(cors.headers.get("access-control-allow-origin"), "https://localhost");
     pass("Capacitor Android local-origin CORS preflight works");
+
+    const stagingCors = await fetch(base + "/api/me", {
+      method: "OPTIONS",
+      headers: { Origin: "https://pinglet-chat-staging.onrender.com", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" }
+    });
+    assert.equal(stagingCors.status, 204);
+    assert.equal(stagingCors.headers.get("access-control-allow-origin"), "https://pinglet-chat-staging.onrender.com");
+    pass("Configured staging service origin is allowed without widening CORS");
   } catch (error) {
     process.stderr.write(output);
     throw error;
