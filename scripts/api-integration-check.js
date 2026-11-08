@@ -96,6 +96,7 @@ async function main() {
     cwd: root,
     env: {
       ...process.env,
+      NODE_ENV: "test",
       PORT: String(port),
       JWT_SECRET: secret,
       REPORTS_ADMIN_TOKEN: adminToken,
@@ -109,6 +110,23 @@ async function main() {
   try {
     await waitForServer();
     pass("HTTP health check confirms PostgreSQL is reachable");
+
+    const asyncFailure = await request("/api/__test/async-error");
+    assert.equal(asyncFailure.status, 500);
+    assert.equal(asyncFailure.data.error, "Something went wrong. Please try again.");
+    assert.doesNotMatch(JSON.stringify(asyncFailure.data), /integration-only error detail|stack|database/i);
+    pass("Rejected async route errors reach the sanitized central API error handler");
+
+    const malformedJson = await fetch(base + "/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{"
+    });
+    assert.equal(malformedJson.status, 400);
+    const malformedJsonBody = await malformedJson.json();
+    assert.equal(malformedJsonBody.error, "Invalid request.");
+    assert.doesNotMatch(JSON.stringify(malformedJsonBody), /SyntaxError|Unexpected token|stack/i);
+    pass("Malformed JSON receives a sanitized API client error");
 
     const consentRejected = await register("No consent", "test-password-123", false);
     assert.equal(consentRejected.status, 400);
