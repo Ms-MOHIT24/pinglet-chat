@@ -16,6 +16,7 @@ const turnTtlSeconds = 1800;
 let output = "";
 let child;
 let testPool;
+let testSuitePassed = false;
 const sockets = [];
 
 async function request(url, { method = "GET", token, body, headers = {} } = {}) {
@@ -116,7 +117,24 @@ async function main() {
   child.stderr.on("data", chunk => { output += chunk.toString(); });
   try {
     await waitForServer();
-    pass("HTTP health check confirms PostgreSQL is reachable");
+    pass("HTTP readiness check confirms PostgreSQL is reachable");
+
+    const liveness = await request("/livez");
+    assert.equal(liveness.status, 200);
+    assert.equal(liveness.data.ok, true);
+    assert.equal(liveness.data.service, "pinglet-chat");
+    pass("Liveness probe reports process health independently of database readiness");
+
+    const readiness = await request("/readyz");
+    assert.equal(readiness.status, 200);
+    assert.equal(readiness.data.ok, true);
+    assert.equal(readiness.data.database, "connected");
+    pass("Readiness probe confirms PostgreSQL connectivity");
+
+    const healthAlias = await request("/health");
+    assert.equal(healthAlias.status, 200);
+    assert.equal(healthAlias.data.database, "connected");
+    pass("Existing Render health-check path remains a readiness alias");
 
     const asyncFailure = await request("/api/__test/async-error");
     assert.equal(asyncFailure.status, 500);
@@ -392,17 +410,38 @@ async function main() {
     assert.ok(!connectSources.includes("ws:"));
     assert.ok(!connectSources.includes("wss:"));
     pass("Staging HTTP CORS and CSP allow only the configured web origin");
+    testSuitePassed = true;
   } catch (error) {
     process.stderr.write(output);
     throw error;
   } finally {
-    sockets.forEach(socket => socket.disconnect());
-    if (child && child.exitCode === null) {
-      child.kill("SIGTERM");
-      await Promise.race([
-        new Promise(resolve => child.once("exit", resolve)),
-        new Promise(resolve => setTimeout(resolve, 3000))
-      ]);
+    if (child) {
+      const activeSockets = sockets.filter(socket => socket.connected);
+      let closeResult = null;
+
+      if (child.exitCode === null && child.signalCode === null) {
+        const closeEvent = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
+        let cleanupTimer;
+        child.kill("SIGTERM");
+        closeResult = await Promise.race([
+          closeEvent,
+          new Promise(resolve => { cleanupTimer = setTimeout(() => resolve(null), 6000); })
+        ]);
+        clearTimeout(cleanupTimer);
+      } else {
+        closeResult = { code: child.exitCode, signal: child.signalCode };
+      }
+
+      if (testSuitePassed) {
+        assert.ok(closeResult, "Server should finish graceful shutdown within six seconds.");
+        assert.equal(closeResult.code, 0, "Server should exit successfully after SIGTERM.");
+        assert.equal(closeResult.signal, null, "Server should handle SIGTERM instead of being force-killed.");
+        assert.ok(activeSockets.every(socket => !socket.connected), "Server shutdown should disconnect active Socket.IO clients.");
+        assert.match(output, /Graceful shutdown complete\./);
+        pass("SIGTERM gracefully disconnects realtime clients and drains PostgreSQL");
+      } else if (!closeResult) {
+        child.kill("SIGKILL");
+      }
     }
     if (testPool) await testPool.end();
   }

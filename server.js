@@ -16,6 +16,8 @@ const SECRET = process.env.JWT_SECRET;
 if (!SECRET || Buffer.byteLength(SECRET) < 32) throw new Error("JWT_SECRET must contain at least 32 random bytes.");
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const app = express();
+let isShuttingDown = false;
+let shutdownStarted = false;
 
 // Express 4 does not automatically forward rejected promises from async route
 // handlers. Wrap route callbacks at registration time so all async failures
@@ -47,7 +49,7 @@ const io = new Server(server, {
   // here as well so browser WebSocket handshakes use the same exact allowlist.
   allowRequest: (req, callback) => {
     const origin = req.headers.origin;
-    callback(null, !origin || allowedOrigins.has(origin));
+    callback(null, !isShuttingDown && (!origin || allowedOrigins.has(origin)));
   }
 });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
@@ -67,6 +69,13 @@ const TURN_CONFIGURED =
 
 
 app.disable("x-powered-by");
+app.use((req, res, next) => {
+  if (!isShuttingDown) return next();
+  res.setHeader("Connection", "close");
+  const message = "Service is restarting. Please retry shortly.";
+  if (req.path === "/api" || req.path.startsWith("/api/")) return res.status(503).json({ error: message });
+  return res.status(503).type("text/plain").send(message);
+});
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && allowedOrigins.has(origin)) {
@@ -175,10 +184,22 @@ async function areBlockedEither(a, b) {
 function validUserId(value) { return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 const labelOptions = ["Friend", "True Friend", "Bestie", "Love", "Partner in Crime", "My Person"];
 
-app.get("/health", async (req, res) => {
-  try { await pool.query("SELECT 1"); res.json({ ok: true, service: "pinglet-chat", database: "connected" }); }
-  catch { res.status(503).json({ ok: false, database: "unavailable" }); }
+app.get("/livez", (req, res) => {
+  res.json({ ok: true, service: "pinglet-chat" });
 });
+
+async function readinessCheck(req, res) {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true, service: "pinglet-chat", database: "connected" });
+  } catch {
+    res.status(503).json({ ok: false, database: "unavailable" });
+  }
+}
+
+app.get("/readyz", readinessCheck);
+// Preserve the existing Render health-check path as a readiness alias.
+app.get("/health", readinessCheck);
 app.get("/api/calls/ice-servers", auth, termsRequired, (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
   if (TURN_CONFIGURED) {
@@ -755,5 +776,43 @@ app.use((error, req, res, next) => {
 
 app.use("/api", (req, res) => res.status(404).json({ error: "API endpoint not found." }));
 app.use((req, res) => res.status(404).type("text/plain").send("Page not found."));
-initializeDatabase().then(async()=>{await cacheNames();server.listen(PORT,"0.0.0.0",()=>console.log("Pinglet listening on port "+PORT));})
-.catch(error=>{console.error("Database initialization failed:",error.message);process.exit(1);});
+const SHUTDOWN_TIMEOUT_MS = 20_000;
+
+function gracefulShutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  isShuttingDown = true;
+  console.log("Received " + signal + "; starting graceful shutdown.");
+
+  const forceTimer = setTimeout(() => {
+    console.error("Graceful shutdown exceeded its 20-second deadline.");
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  forceTimer.unref();
+
+  // Socket.IO disconnects active clients and closes its underlying HTTP server.
+  // Once its callback runs, drain PostgreSQL before allowing the process to exit.
+  io.close(() => {
+    pool.end().then(() => {
+      clearTimeout(forceTimer);
+      console.log("Graceful shutdown complete.");
+      process.exitCode = 0;
+    }).catch(() => {
+      clearTimeout(forceTimer);
+      console.error("Graceful shutdown could not close the PostgreSQL pool.");
+      process.exitCode = 1;
+    });
+  });
+}
+
+process.once("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.once("SIGINT", () => gracefulShutdown("SIGINT"));
+
+initializeDatabase().then(async () => {
+  await cacheNames();
+  if (isShuttingDown) return;
+  server.listen(PORT, "0.0.0.0", () => console.log("Pinglet listening on port " + PORT));
+}).catch(error => {
+  console.error("Database initialization failed:", error.message);
+  process.exit(1);
+});

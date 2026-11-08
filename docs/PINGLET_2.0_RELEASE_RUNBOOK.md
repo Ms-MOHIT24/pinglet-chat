@@ -82,11 +82,17 @@ No automatic production deploy should be inferred from a code change or PR appro
 - Do not change dependencies without reviewing the resulting lockfile diff and CI results.
 - Confirm the Android build workflow uses the lockfile-backed install as well.
 
-### API reliability
+### API reliability and graceful deployment shutdown
 
 - Async Express 4 route failures must be forwarded to centralized error handling.
 - Client responses must not reveal stack traces, SQL, database credentials or internal exception messages.
+- Keep `/livez` as a process-liveness probe that does not depend on PostgreSQL.
+- Keep `/readyz` as a PostgreSQL-backed readiness probe; preserve `/health` as the Render readiness alias.
+- During shutdown, reject new requests with HTTP 503, reject new Socket.IO handshakes, close active Socket.IO connections, and drain the PostgreSQL pool.
+- Handle both `SIGTERM` (platform deploy/restart) and `SIGINT`; use a bounded shutdown deadline.
 - Test malformed JSON, oversized request bodies, rejected async handlers, authentication failures, unknown routes, database unavailability and rate-limit responses.
+- Test that `SIGTERM` during active Socket.IO sessions disconnects clients cleanly and exits without a forced kill.
+- In-memory call rooms and Snake Duel state are transient and will end on a restart; test client reconnection and present clear user-facing behavior.
 - Keep integration-only fault injection disabled unless `NODE_ENV=test`.
 
 ### Separate staging environment
