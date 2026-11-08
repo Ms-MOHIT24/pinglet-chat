@@ -1753,3 +1753,73 @@ $("#modalForm").addEventListener("submit", async event => {
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Pinglet offline shell unavailable:", error)));
 }
+
+
+/* Shared dialog focus, keyboard and screen-reader behavior. */
+function setupModalAccessibility() {
+  const dialogs = [...document.querySelectorAll(".modal")];
+  const focusRestore = new WeakMap();
+  const openDialogs = () => dialogs.filter(dialog => !dialog.classList.contains("hidden"));
+  const focusableIn = dialog => [...dialog.querySelectorAll(
+    'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])'
+  )].filter(element => !element.closest(".hidden") && element.getClientRects().length > 0);
+
+  dialogs.forEach(dialog => {
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-hidden", String(dialog.classList.contains("hidden")));
+    if (!dialog.hasAttribute("aria-labelledby")) {
+      const heading = dialog.querySelector("h1,h2,h3");
+      if (heading) {
+        if (!heading.id) heading.id = dialog.id + "AccessibleTitle";
+        dialog.setAttribute("aria-labelledby", heading.id);
+      }
+    }
+    const observer = new MutationObserver(() => {
+      if (dialog.classList.contains("hidden")) {
+        dialog.setAttribute("aria-hidden", "true");
+        const previous = focusRestore.get(dialog);
+        focusRestore.delete(dialog);
+        if (previous && previous.isConnected && typeof previous.focus === "function") previous.focus();
+        return;
+      }
+      dialog.setAttribute("aria-hidden", "false");
+      if (!focusRestore.has(dialog)) focusRestore.set(dialog, document.activeElement);
+      const first = focusableIn(dialog)[0];
+      const target = first || dialog.querySelector(".modal-card") || dialog;
+      if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      requestAnimationFrame(() => { if (!dialog.classList.contains("hidden")) target.focus(); });
+    });
+    observer.observe(dialog, { attributes: true, attributeFilter: ["class"] });
+  });
+
+  document.addEventListener("keydown", event => {
+    const dialog = openDialogs().at(-1);
+    if (!dialog) return;
+    if (event.key === "Escape") {
+      const closeButton = dialog.querySelector(".modal-close,button[id$='Close'],button[id$='close']");
+      if (closeButton) {
+        event.preventDefault();
+        closeButton.click();
+      } else if (dialog.id !== "termsModal") {
+        event.preventDefault();
+        dialog.classList.add("hidden");
+      }
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusables = focusableIn(dialog);
+    if (!focusables.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); first.focus();
+    }
+  });
+}
+setupModalAccessibility();
