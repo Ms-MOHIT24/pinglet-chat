@@ -136,12 +136,16 @@ check("Android ships its own web UI instead of remote-loading the website",
 const productionOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-live.onrender.com" });
 const stagingOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-staging.onrender.com" });
 const invalidOriginPolicy = createOriginPolicy({ PUBLIC_URL: "http://pinglet-chat-staging.onrender.com" });
+const localDevOriginPolicy = createOriginPolicy({ NODE_ENV: "development", PORT: "3000" });
 check("Production and staging browser origin policies are mutually isolated",
   productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
   !productionOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
   stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-staging.onrender.com") &&
   !stagingOriginPolicy.allowedOrigins.has("https://pinglet-chat-live.onrender.com") &&
-  invalidOriginPolicy.publicOrigin === null);
+  invalidOriginPolicy.publicOrigin === null &&
+  localDevOriginPolicy.allowedOrigins.has("http://localhost:3000") &&
+  localDevOriginPolicy.connectSrc.includes("ws://localhost:3000") &&
+  !createOriginPolicy({ NODE_ENV: "staging", PORT: "3000" }).allowedOrigins.has("http://localhost:3000"));
 check("WebSocket CSP sources are exact to the active HTTPS origin",
   productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-live.onrender.com") &&
   !productionOriginPolicy.connectSrc.includes("wss://pinglet-chat-staging.onrender.com") &&
