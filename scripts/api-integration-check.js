@@ -156,8 +156,9 @@ async function main() {
     const seededCount = 105;
     const conversation = [aliceId, bobId].sort().join(":");
     const seededIds = Array.from({ length: seededCount }, () => randomUUID());
+    const tiedCreated = new Date(Date.now() - (seededCount + 10) * 1000).toISOString();
     const seededCreated = Array.from({ length: seededCount }, (_, index) =>
-      new Date(Date.now() - (seededCount - index) * 1000).toISOString()
+      index < 3 ? tiedCreated : new Date(Date.now() - (seededCount - index) * 1000).toISOString()
     );
     await testPool.query(
       `INSERT INTO messages(id,conversation,sender,recipient,ciphertext,iv,created)
@@ -181,7 +182,8 @@ async function main() {
     const allHistory = [...olderPage.data.messages, ...history.data.messages];
     assert.equal(new Set(allHistory.map(message => message.id)).size, 106);
     assert.ok(allHistory.every((message, index) => index === 0 ||
-      new Date(allHistory[index - 1].created).getTime() <= new Date(message.created).getTime()));
+      (String(allHistory[index - 1].created).localeCompare(String(message.created)) ||
+        String(allHistory[index - 1].id).localeCompare(String(message.id))) <= 0));
     pass("Conversation history paginates beyond 100 messages with validated cursors and no duplicate rows");
 
     const report = await request("/api/reports", {
