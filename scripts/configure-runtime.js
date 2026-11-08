@@ -21,12 +21,46 @@ if (raw) {
   apiOrigin = parsed.origin;
 }
 
+// Android serves its bundled UI from Capacitor rather than receiving the
+// server's Helmet header. Generate a matching, exact-origin CSP for that build.
+// An empty input retains the existing production API default.
+const effectiveApiOrigin = apiOrigin || "https://pinglet-chat-live.onrender.com";
+const apiUrl = new URL(effectiveApiOrigin);
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self'",
+  `connect-src 'self' ${effectiveApiOrigin} wss://${apiUrl.host}`,
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "style-src 'self' 'unsafe-inline'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'"
+].join("; ");
+
 const output = [
   '"use strict";',
   "window.PINGLET_CONFIG = Object.freeze({ apiOrigin: " + JSON.stringify(apiOrigin) + " });",
   ""
 ].join("\n");
 
-const destination = path.join(__dirname, "..", "public", "runtime-config.js");
-fs.writeFileSync(destination, output, { encoding: "utf8", mode: 0o644 });
-process.stdout.write("Configured Pinglet runtime API origin: " + (apiOrigin || "(browser same-origin / native production default)") + "\n");
+const publicDir = path.join(__dirname, "..", "public");
+const runtimeConfigPath = path.join(publicDir, "runtime-config.js");
+const htmlPath = path.join(publicDir, "index.html");
+fs.writeFileSync(runtimeConfigPath, output, { encoding: "utf8", mode: 0o644 });
+
+let html = fs.readFileSync(htmlPath, "utf8");
+const cspTag = '<meta http-equiv="Content-Security-Policy" content="' + contentSecurityPolicy + '">';
+const cspMetaPattern = /<meta\\s+http-equiv=["']Content-Security-Policy["'][^>]*>/i;
+if (cspMetaPattern.test(html)) {
+  html = html.replace(cspMetaPattern, cspTag);
+} else {
+  const titlePattern = /<title\\b/i;
+  if (!titlePattern.test(html)) throw new Error("Could not insert the native Content Security Policy.");
+  html = html.replace(titlePattern, cspTag + "\\n<title");
+}
+fs.writeFileSync(htmlPath, html, "utf8");
+
+process.stdout.write("Configured Pinglet runtime API origin: " +
+  (apiOrigin || "(native production default)") + "\\n");
