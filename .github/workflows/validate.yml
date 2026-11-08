@@ -8,6 +8,7 @@ on:
     paths:
       - "public/**"
       - "scripts/**"
+      - "lib/**"
       - "server.js"
       - "package.json"
       - "package-lock.json"
