@@ -1,0 +1,75 @@
+name: Validate Pinglet
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "public/**"
+      - "scripts/**"
+      - "server.js"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.json"
+      - ".github/workflows/validate.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pinglet-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: pinglet_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pinglet_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install app dependencies
+        run: npm install
+
+      - name: Check JavaScript syntax
+        run: >-
+          node --check server.js &&
+          node --check public/app.js &&
+          node --check scripts/smoke-check.js &&
+          node --check scripts/api-integration-check.js &&
+          node --check scripts/configure-android-signing.js &&
+          node --check scripts/copy-vendor.js &&
+          node --check scripts/configure-android-permissions.js
+
+      - name: Smoke-check app features
+        run: node scripts/smoke-check.js
+
+      - name: API integration checks
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pinglet_test
+          DATABASE_SSL: disable
+          JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
+          REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
+        run: node scripts/api-integration-check.js
