@@ -132,8 +132,7 @@ check("Android ships its own web UI instead of remote-loading the website",
   app.includes("const API_ORIGIN = isNativeShell") &&
   app.includes('configuredApiOrigin || "https://pinglet-chat-live.onrender.com"') &&
   html.includes('src="/vendor/socket.io.js" defer') &&
-  server.includes('"https://localhost"') &&
-  server.includes('"https://pinglet-chat-live.onrender.com"'));
+  server.includes("createOriginPolicy(process.env"));
 const productionOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-live.onrender.com" });
 const stagingOriginPolicy = createOriginPolicy({ PUBLIC_URL: "https://pinglet-chat-staging.onrender.com" });
 const invalidOriginPolicy = createOriginPolicy({ PUBLIC_URL: "http://pinglet-chat-staging.onrender.com" });
