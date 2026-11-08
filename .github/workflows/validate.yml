@@ -65,6 +65,7 @@ jobs:
           node --check scripts/copy-vendor.js &&
           node --check scripts/configure-android-permissions.js &&
           node --check scripts/configure-runtime.js &&
+          node --check scripts/configure-runtime-check.js &&
           bash -n scripts/verify-database-backup-restore.sh
 
       - name: Smoke-check app features
@@ -77,6 +78,9 @@ jobs:
           JWT_SECRET: pinglet-ci-integration-secret-value-0123456789abcdef
           REPORTS_ADMIN_TOKEN: pinglet-ci-moderator-token-value-0123456789abcdef
         run: node scripts/api-integration-check.js
+
+      - name: Verify environment-specific Android runtime and CSP generation
+        run: node scripts/configure-runtime-check.js
 
       - name: Verify disposable database backup and restore
         env:
