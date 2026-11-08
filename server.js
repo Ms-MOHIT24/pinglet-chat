@@ -27,6 +27,17 @@ const capacitorOrigins = [
 const io = new Server(server, { cors: { origin: capacitorOrigins } });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
 const PORT = process.env.PORT || 3000;
+const TURN_URLS = (process.env.TURN_URLS || "").split(",").map(value => value.trim()).filter(Boolean);
+const TURN_SHARED_SECRET = process.env.TURN_SHARED_SECRET || "";
+const TURN_CREDENTIAL_TTL_SECONDS = Number(process.env.TURN_CREDENTIAL_TTL_SECONDS || 3600);
+const TURN_CONFIGURED =
+  TURN_URLS.length > 0 &&
+  TURN_URLS.length <= 8 &&
+  TURN_URLS.every(value => /^turns?:/i.test(value) && value.length <= 512 && !/\\s/.test(value)) &&
+  Buffer.byteLength(TURN_SHARED_SECRET) >= 32 &&
+  Number.isInteger(TURN_CREDENTIAL_TTL_SECONDS) &&
+  TURN_CREDENTIAL_TTL_SECONDS >= 300 &&
+  TURN_CREDENTIAL_TTL_SECONDS <= 86400;
 
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -140,6 +151,18 @@ const labelOptions = ["Friend", "True Friend", "Bestie", "Love", "Partner in Cri
 app.get("/health", async (req, res) => {
   try { await pool.query("SELECT 1"); res.json({ ok: true, service: "pinglet-chat", database: "connected" }); }
   catch { res.status(503).json({ ok: false, database: "unavailable" }); }
+});
+
+app.get("/api/calls/ice-servers", auth, termsRequired, (req, res) => {
+  const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  if (TURN_CONFIGURED) {
+    const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_TTL_SECONDS;
+    const username = expiresAt + ":" + req.user.id;
+    const credential = crypto.createHmac("sha1", TURN_SHARED_SECRET).update(username).digest("base64");
+    iceServers.push({ urls: TURN_URLS, username, credential });
+  }
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({ iceServers, turnConfigured: TURN_CONFIGURED });
 });
 app.post("/api/register", authLimiter, async (req, res) => {
   try {
