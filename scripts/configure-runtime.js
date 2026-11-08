@@ -29,7 +29,7 @@ const apiUrl = new URL(effectiveApiOrigin);
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
-  \`connect-src 'self' \${effectiveApiOrigin} wss://\${apiUrl.host}\`,
+  "connect-src 'self' " + effectiveApiOrigin + " wss://" + apiUrl.host,
   "img-src 'self' data: blob:",
   "media-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
@@ -42,7 +42,7 @@ const output = [
   '"use strict";',
   "window.PINGLET_CONFIG = Object.freeze({ apiOrigin: " + JSON.stringify(apiOrigin) + " });",
   ""
-].join("\\n");
+].join("\n");
 
 const publicDir = path.join(__dirname, "..", "public");
 const runtimeConfigPath = path.join(publicDir, "runtime-config.js");
