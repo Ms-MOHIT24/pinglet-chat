@@ -7,6 +7,7 @@ const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
 const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
 let messageSending = false;
 const messageDrafts = new Map();
+let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false };
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
 let reportTarget = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
@@ -450,6 +451,13 @@ function renderRequests(incoming, outgoing) {
 }
 async function openPeer(friend) {
   const previousPeerId = peer?.id;
+  if (previousPeerId !== friend.id) {
+    messageHistory = { peerId: friend.id, messages: [], nextCursor: null, hasMore: false, loading: false };
+    $("#messages").replaceChildren();
+    voiceObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    voiceObjectUrls.clear();
+    updateMessageHistoryControl();
+  }
   const input = $("#messageInput");
   if (previousPeerId && previousPeerId !== friend.id && input) {
     const previousDraft = input.value;
@@ -473,12 +481,55 @@ async function openPeer(friend) {
   await loadMessages();
   updateSnakeUI();
 }
-async function loadMessages() {
+function updateMessageHistoryControl() {
+  const control = $("#messageHistoryControl");
+  const button = $("#loadOlderMessages");
+  if (!control || !button) return;
+  const active = Boolean(peer && messageHistory.peerId === peer.id);
+  control.hidden = !(active && messageHistory.hasMore);
+  button.disabled = !active || !messageHistory.hasMore || messageHistory.loading;
+  button.textContent = messageHistory.loading ? "Loading older messages…" : "Load older messages";
+  $("#messages")?.setAttribute("aria-busy", messageHistory.loading ? "true" : "false");
+}
+
+async function loadMessages({ older = false } = {}) {
   if (!peer) return;
   const activePeer = peer;
+  if (messageHistory.peerId !== activePeer.id) {
+    messageHistory = { peerId: activePeer.id, messages: [], nextCursor: null, hasMore: false, loading: false };
+  }
+
+  const history = messageHistory;
+  if (history.loading || (older && !history.nextCursor)) return;
+
+  const list = $("#messages");
+  const previousHeight = list.scrollHeight;
+  const previousTop = list.scrollTop;
+  const wasNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  history.loading = true;
+  updateMessageHistoryControl();
+
+  const nextVoiceUrls = new Set();
   try {
-    const data = await api("/messages/" + activePeer.id);
-    const rendered = await Promise.all((data.messages || []).map(async message => {
+    const query = older ? "?before=" + encodeURIComponent(history.nextCursor) : "";
+    const data = await api("/messages/" + encodeURIComponent(activePeer.id) + query);
+    if (messageHistory !== history || !peer || peer.id !== activePeer.id) return;
+
+    const incoming = Array.isArray(data.messages) ? data.messages : [];
+    const alreadyLoadedOlderPages = history.messages.length > incoming.length;
+    const byId = new Map(history.messages.map(message => [message.id, message]));
+    incoming.forEach(message => byId.set(message.id, message));
+    history.messages = [...byId.values()].sort((a, b) => {
+      const timeDifference = new Date(a.created).getTime() - new Date(b.created).getTime();
+      return timeDifference || String(a.id).localeCompare(String(b.id));
+    });
+
+    if (older || !alreadyLoadedOlderPages) {
+      history.nextCursor = data.nextCursor || null;
+      history.hasMore = Boolean(data.hasMore && history.nextCursor);
+    }
+
+    const rendered = await Promise.all(history.messages.map(async message => {
       const bubble = document.createElement("div");
       bubble.className = "bubble " + (message.sender === me.id ? "mine" : "theirs");
       const clear = await decryptMessage(message, activePeer);
@@ -487,7 +538,7 @@ async function loadMessages() {
         const mime = parts[1] || "audio/webm";
         const bytes = base64ToBytes(parts.slice(2).join("|"));
         const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-        voiceObjectUrls.add(url);
+        nextVoiceUrls.add(url);
         const audio = document.createElement("audio");
         audio.controls = true;
         audio.preload = "metadata";
@@ -522,11 +573,15 @@ async function loadMessages() {
       }
       return bubble;
     }));
-    // A slower response for the previous chat must not overwrite the newly opened chat.
-    if (!peer || peer.id !== activePeer.id) return;
-    const list = $("#messages");
+
+    if (messageHistory !== history || !peer || peer.id !== activePeer.id) {
+      nextVoiceUrls.forEach(url => URL.revokeObjectURL(url));
+      return;
+    }
+
     voiceObjectUrls.forEach(url => URL.revokeObjectURL(url));
     voiceObjectUrls.clear();
+    nextVoiceUrls.forEach(url => voiceObjectUrls.add(url));
     list.replaceChildren();
     if (!rendered.length) {
       const empty = document.createElement("p");
@@ -536,9 +591,24 @@ async function loadMessages() {
     } else {
       list.append(...rendered);
     }
-    list.scrollTop = list.scrollHeight;
-  } catch (error) { toast(error.message); }
+
+    if (older) {
+      list.scrollTop = previousTop + (list.scrollHeight - previousHeight);
+    } else if (wasNearBottom) {
+      list.scrollTop = list.scrollHeight;
+    }
+    updateMessageHistoryControl();
+  } catch (error) {
+    nextVoiceUrls.forEach(url => URL.revokeObjectURL(url));
+    if (messageHistory === history && peer && peer.id === activePeer.id) toast(error.message);
+  } finally {
+    if (messageHistory === history) {
+      history.loading = false;
+      updateMessageHistoryControl();
+    }
+  }
 }
+$("#loadOlderMessages").addEventListener("click", () => loadMessages({ older: true }));
 $("#sendForm").addEventListener("submit", async event => {
   event.preventDefault();
   const messageText = $("#messageInput").value.trim();
