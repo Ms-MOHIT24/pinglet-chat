@@ -29,9 +29,11 @@ async function request(url, { method = "GET", token, body, headers = {} } = {}) 
   const data = await response.json().catch(() => ({}));
   return { status: response.status, data, headers: response.headers };
 }
-function connectSocket(token) {
+function connectSocket(token, origin) {
   return new Promise((resolve, reject) => {
-    const socket = createSocket(base, { auth: { token }, transports: ["websocket"], reconnection: false });
+    const options = { auth: { token }, transports: ["websocket"], reconnection: false };
+    if (origin) options.extraHeaders = { Origin: origin };
+    const socket = createSocket(base, options);
     const timeout = setTimeout(() => { socket.close(); reject(new Error("Socket connection timed out.")); }, 8000);
     socket.once("connect", () => { clearTimeout(timeout); resolve(socket); });
     socket.once("connect_error", error => { clearTimeout(timeout); socket.close(); reject(error); });
@@ -150,6 +152,12 @@ async function main() {
     const aliceId = alice.data.user.id;
     pass("Account registration stores a new account after consent");
 
+    const stagingOriginSocket = await connectSocket(aliceToken, "https://pinglet-chat-staging.onrender.com");
+    sockets.push(stagingOriginSocket);
+    pass("Socket.IO accepts the configured staging browser origin");
+    await assert.rejects(connectSocket(aliceToken, "https://pinglet-chat-live.onrender.com"));
+    pass("Socket.IO rejects the production browser origin when running as staging");
+
     const aliceMe = await request("/api/me", { token: aliceToken });
     assert.equal(aliceMe.status, 200);
     assert.equal(aliceMe.data.user.termsAccepted, true);
@@ -232,7 +240,7 @@ async function main() {
 
 
 
-    const aliceSocket = await connectSocket(aliceToken);
+    const aliceSocket = stagingOriginSocket;
     const bobSocket = await connectSocket(bobToken);
     sockets.push(aliceSocket, bobSocket);
     pass("Authenticated Socket.IO connections work for both friends");
@@ -336,7 +344,27 @@ async function main() {
     });
     assert.equal(stagingCors.status, 204);
     assert.equal(stagingCors.headers.get("access-control-allow-origin"), "https://pinglet-chat-staging.onrender.com");
-    pass("Configured staging service origin is allowed without widening CORS");
+
+    const productionCors = await fetch(base + "/api/me", {
+      method: "OPTIONS",
+      headers: { Origin: "https://pinglet-chat-live.onrender.com", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization" }
+    });
+    assert.equal(productionCors.status, 204);
+    assert.equal(productionCors.headers.get("access-control-allow-origin"), null);
+
+    const pageResponse = await fetch(base + "/");
+    assert.equal(pageResponse.status, 200);
+    const csp = pageResponse.headers.get("content-security-policy") || "";
+    const connectDirective = csp.split(";").map(value => value.trim()).find(value => value.startsWith("connect-src ")) || "";
+    const connectSources = connectDirective.split(/\\s+/).slice(1);
+    assert.ok(connectSources.includes("'self'"));
+    assert.ok(connectSources.includes("https://pinglet-chat-staging.onrender.com"));
+    assert.ok(connectSources.includes("wss://pinglet-chat-staging.onrender.com"));
+    assert.ok(!connectSources.includes("https://pinglet-chat-live.onrender.com"));
+    assert.ok(!connectSources.includes("wss://pinglet-chat-live.onrender.com"));
+    assert.ok(!connectSources.includes("ws:"));
+    assert.ok(!connectSources.includes("wss:"));
+    pass("Staging HTTP CORS and CSP allow only the configured web origin");
   } catch (error) {
     process.stderr.write(output);
     throw error;
