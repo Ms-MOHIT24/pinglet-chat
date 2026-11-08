@@ -1567,14 +1567,19 @@ function addCallTile(peerId, name, local = false, userId = null) {
   }
   return entry;
 }
-async function getCallIceServers() {
+async function getCallIceServers(generation) {
   if (!callIceServersPromise) {
     callIceServersPromise = api("/calls/ice-servers").then(data => {
       const servers = Array.isArray(data.iceServers) ? data.iceServers : [];
+      if (data.turnConfigured !== true && generation === callSessionGeneration && callCode) {
+        setCallStatus("Direct connection only · TURN relay is not configured");
+      }
       return servers.length ? servers : [{ urls: "stun:stun.l.google.com:19302" }];
     }).catch(error => {
       console.warn("Could not load TURN relay settings; trying a direct STUN connection:", error);
-      setCallStatus("Relay settings unavailable · trying a direct connection");
+      if (generation === callSessionGeneration && callCode) {
+        setCallStatus("Relay settings unavailable · trying a direct connection");
+      }
       return [{ urls: "stun:stun.l.google.com:19302" }];
     });
   }
@@ -1604,7 +1609,7 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
 
   const generation = callSessionGeneration;
   const creation = (async () => {
-    const iceServers = await getCallIceServers();
+    const iceServers = await getCallIceServers(generation);
     if (generation !== callSessionGeneration || !callCode || !callStream) return null;
     if (callPeers.has(peerId)) return callPeers.get(peerId);
 
