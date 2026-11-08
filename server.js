@@ -157,7 +157,7 @@ app.get("/api/calls/ice-servers", auth, termsRequired, (req, res) => {
   const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
   if (TURN_CONFIGURED) {
     const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_TTL_SECONDS;
-    const username = expiresAt + ":" + req.user.id;
+    const username = expiresAt + ":" + crypto.randomUUID();
     const credential = crypto.createHmac("sha1", TURN_SHARED_SECRET).update(username).digest("base64");
     iceServers.push({ urls: TURN_URLS, username, credential });
   }
