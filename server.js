@@ -11,6 +11,7 @@ const { Server } = require("socket.io");
 const crypto = require("crypto");
 const path = require("path");
 const { createOriginPolicy } = require("./lib/origin-policy");
+const { isValidTurnUrl } = require("./lib/turn-url");
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET || Buffer.byteLength(SECRET) < 32) throw new Error("JWT_SECRET must contain at least 32 random bytes.");
@@ -61,7 +62,7 @@ const TURN_CREDENTIAL_TTL_SECONDS = Number(process.env.TURN_CREDENTIAL_TTL_SECON
 const TURN_CONFIGURED =
   TURN_URLS.length > 0 &&
   TURN_URLS.length <= 8 &&
-  TURN_URLS.every(value => /^turns?:/i.test(value) && value.length <= 512 && !/\s/.test(value)) &&
+  TURN_URLS.every(isValidTurnUrl) &&
   Buffer.byteLength(TURN_SHARED_SECRET) >= 32 &&
   Number.isInteger(TURN_CREDENTIAL_TTL_SECONDS) &&
   TURN_CREDENTIAL_TTL_SECONDS >= 300 &&
