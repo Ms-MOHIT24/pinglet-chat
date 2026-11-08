@@ -74,7 +74,7 @@ for (const [invalidOrigin, label] of [
   const invalid = createWorkspace(invalidOrigin);
   try {
     assert.notEqual(invalid.result.status, 0, label + " must be rejected");
-    process.stdout.write("PASS  Invalid Android API " + label + " is rejected\\n");
+    process.stdout.write("PASS  Invalid Android API " + label + " is rejected" + String.fromCharCode(10));
   } finally {
     fs.rmSync(invalid.root, { recursive: true, force: true });
   }
