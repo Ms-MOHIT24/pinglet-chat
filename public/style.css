@@ -1329,3 +1329,10 @@ body:before{
 .call-safety-actions button{min-height:32px;padding:6px 10px;border:1px solid rgba(255,255,255,.2);border-radius:8px;background:rgba(7,12,22,.88);color:#fff;font:600 11px/1.2 system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(8px);}
 .call-safety-actions .call-block-peer{border-color:rgba(255,125,137,.55);color:#ffd6da;}
 .call-safety-actions button:focus-visible{outline:2px solid #d9fb83;outline-offset:2px;}
+
+
+/* Cursor-paginated conversation history control. */
+.message-history-control{display:flex;justify-content:center;flex:0 0 auto;padding:8px 12px 0}
+.message-history-control[hidden]{display:none!important}
+.message-history-button{font-size:11px;line-height:1.3}
+.message-history-button:disabled{opacity:.6;cursor:wait}

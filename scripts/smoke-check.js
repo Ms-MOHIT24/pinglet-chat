@@ -75,7 +75,7 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v14"/.test(sw));
+  /CACHE_NAME = "pinglet-shell-v15"/.test(sw));
 
 
 check("Terms acceptance is required for account creation and social writes",
@@ -160,6 +160,18 @@ check("Dialogs expose managed focus, Escape and screen-reader state",
   app.includes("focusRestore") &&
   app.includes('event.key === "Escape"') &&
   app.includes('event.key !== "Tab"'));
+
+check("Conversation history uses validated cursor pagination and a deterministic index",
+  server.includes("msg_pair_cursor") &&
+  server.includes("to_char(created AT TIME ZONE") && server.includes("AS created") &&
+  server.includes("ORDER BY created DESC,id DESC") &&
+  server.includes("Invalid message-history cursor") &&
+  app.includes("messageHistory") &&
+  app.includes('loadMessages({ older: true })') &&
+  app.includes('String(a.created).localeCompare(String(b.created))') &&
+  app.includes("history.refreshPending = true") &&
+  html.includes('id="loadOlderMessages"') &&
+  html.includes('id="messageHistoryControl"'));
 
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&

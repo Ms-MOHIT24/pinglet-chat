@@ -1,5 +1,7 @@
 "use strict";
 const { spawn } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
+const { Pool } = require("pg");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const { io: createSocket } = require("socket.io-client");
@@ -11,6 +13,7 @@ const secret = process.env.JWT_SECRET || "pinglet-integration-test-secret-value-
 const adminToken = process.env.REPORTS_ADMIN_TOKEN || "pinglet-integration-moderator-token-1234567890";
 let output = "";
 let child;
+let testPool;
 const sockets = [];
 
 async function request(url, { method = "GET", token, body, headers = {} } = {}) {
@@ -88,6 +91,7 @@ async function register(name, password, termsAccepted = true) {
 }
 async function main() {
   assert.ok(process.env.DATABASE_URL, "DATABASE_URL must point to the CI PostgreSQL service.");
+  testPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   child = spawn(process.execPath, [path.join(root, "server.js")], {
     cwd: root,
     env: {
@@ -149,10 +153,38 @@ async function main() {
       }
     });
     assert.equal(message.status, 200);
+    const seededCount = 105;
+    const conversation = [aliceId, bobId].sort().join(":");
+    const seededIds = Array.from({ length: seededCount }, () => randomUUID());
+    const tiedCreated = new Date(Date.now() - (seededCount + 10) * 1000).toISOString();
+    const seededCreated = Array.from({ length: seededCount }, (_, index) =>
+      index < 3 ? tiedCreated : new Date(Date.now() - (seededCount - index) * 1000).toISOString()
+    );
+    await testPool.query(
+      `INSERT INTO messages(id,conversation,sender,recipient,ciphertext,iv,created)
+       SELECT seeded.id,$1,$2,$3,'dGVzdA==','AAAAAAAAAAAAAAAA',seeded.created
+       FROM unnest($4::uuid[],$5::timestamptz[]) AS seeded(id,created)`,
+      [conversation, bobId, aliceId, seededIds, seededCreated]
+    );
+
     const history = await request("/api/messages/" + bobId, { token: aliceToken });
     assert.equal(history.status, 200);
-    assert.equal(history.data.messages.length, 1);
-    pass("Encrypted message write and conversation history work");
+    assert.equal(history.data.messages.length, 100);
+    assert.equal(history.data.hasMore, true);
+    assert.ok(typeof history.data.nextCursor === "string" && history.data.nextCursor.length > 0);
+    const invalidCursor = await request("/api/messages/" + bobId + "?before=not-a-valid-cursor", { token: aliceToken });
+    assert.equal(invalidCursor.status, 400);
+    const olderPage = await request("/api/messages/" + bobId + "?before=" + encodeURIComponent(history.data.nextCursor), { token: aliceToken });
+    assert.equal(olderPage.status, 200);
+    assert.equal(olderPage.data.messages.length, 6);
+    assert.equal(olderPage.data.hasMore, false);
+    assert.equal(olderPage.data.nextCursor, null);
+    const allHistory = [...olderPage.data.messages, ...history.data.messages];
+    assert.equal(new Set(allHistory.map(message => message.id)).size, 106);
+    assert.ok(allHistory.every((message, index) => index === 0 ||
+      (String(allHistory[index - 1].created).localeCompare(String(message.created)) ||
+        String(allHistory[index - 1].id).localeCompare(String(message.id))) <= 0));
+    pass("Conversation history paginates beyond 100 messages with validated cursors and no duplicate rows");
 
     const report = await request("/api/reports", {
       method: "POST",
@@ -280,6 +312,7 @@ async function main() {
         new Promise(resolve => setTimeout(resolve, 3000))
       ]);
     }
+    if (testPool) await testPool.end();
   }
 }
 

@@ -65,6 +65,7 @@ async function initializeDatabase() {
       ciphertext TEXT NOT NULL, iv TEXT NOT NULL, created TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS msg_pair ON messages(conversation, created);
+    CREATE INDEX IF NOT EXISTS msg_pair_cursor ON messages(conversation, created DESC, id DESC);
     CREATE TABLE IF NOT EXISTS friend_requests (
       id UUID PRIMARY KEY, sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       receiver_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -348,9 +349,53 @@ app.patch("/api/moderation/reports/:id", moderationAuth, async (req, res) => {
 app.get("/api/messages/:peer", auth, async (req, res) => {
   const peer = req.params.peer;
   if (!await areFriends(req.user.id, peer)) return res.status(403).json({ error: "Add this person as a friend before chatting." });
+
   const conversation = [req.user.id, peer].sort().join(":");
-  const result = await pool.query("SELECT id,sender,recipient,ciphertext,iv,created FROM messages WHERE conversation=$1 ORDER BY created DESC LIMIT 100", [conversation]);
-  res.json({ messages: result.rows.reverse() });
+  const pageSize = 100;
+  let cursor = null;
+
+  if (req.query.before !== undefined) {
+    const encoded = req.query.before;
+    if (typeof encoded !== "string" || encoded.length > 512 || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+      return res.status(400).json({ error: "Invalid message-history cursor." });
+    }
+    try {
+      const decoded = Buffer.from(encoded, "base64url");
+      if (decoded.toString("base64url") !== encoded) return res.status(400).json({ error: "Invalid message-history cursor." });
+      cursor = JSON.parse(decoded.toString("utf8"));
+    } catch {
+      return res.status(400).json({ error: "Invalid message-history cursor." });
+    }
+
+    const validCursor = cursor && typeof cursor === "object" && !Array.isArray(cursor) &&
+      typeof cursor.created === "string" &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(cursor.created) &&
+      !Number.isNaN(Date.parse(cursor.created)) &&
+      typeof cursor.id === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursor.id);
+    if (!validCursor) return res.status(400).json({ error: "Invalid message-history cursor." });
+  }
+
+  const cursorClause = cursor ? " AND (created,id) < ($2::timestamptz,$3::uuid)" : "";
+  const values = cursor ? [conversation, cursor.created, cursor.id] : [conversation];
+  const result = await pool.query(
+    `SELECT id,sender,recipient,ciphertext,iv,
+       to_char(created AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created
+     FROM messages
+     WHERE conversation=$1${cursorClause}
+     ORDER BY created DESC,id DESC
+     LIMIT ${pageSize + 1}`,
+    values
+  );
+
+  const hasMore = result.rows.length > pageSize;
+  const page = result.rows.slice(0, pageSize);
+  const oldest = page[page.length - 1];
+  const nextCursor = hasMore && oldest
+    ? Buffer.from(JSON.stringify({ created: oldest.created, id: oldest.id })).toString("base64url")
+    : null;
+  const messages = page.reverse();
+  res.json({ messages, hasMore, nextCursor });
 });
 app.post("/api/messages", auth, termsRequired, async (req, res) => {
   const { recipient, ciphertext, iv } = req.body;
