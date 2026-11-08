@@ -377,14 +377,14 @@ app.get("/api/messages/:peer", auth, async (req, res) => {
   }
 
   const cursorClause = cursor ? " AND (created,id) < ($2::timestamptz,$3::uuid)" : "";
-  const values = cursor ? [conversation, cursor.created, cursor.id, pageSize + 1] : [conversation, pageSize + 1];
+  const values = cursor ? [conversation, cursor.created, cursor.id] : [conversation];
   const result = await pool.query(
     `SELECT id,sender,recipient,ciphertext,iv,created,
        to_char(created AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created
      FROM messages
      WHERE conversation=$1${cursorClause}
      ORDER BY created DESC,id DESC
-     LIMIT ${values.length}`,
+     LIMIT ${pageSize + 1}`,
     values
   );
 
