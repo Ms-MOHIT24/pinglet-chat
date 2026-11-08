@@ -1673,8 +1673,21 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
     if (generation === callSessionGeneration) {
       const pending = callPeerPromises.get(peerId);
       if (pending === creation) callPeerPromises.delete(peerId);
+
+      // A peer is registered before offer/track setup completes. If any of
+      // those steps fails, close and remove that partial peer so a retry can
+      // create a fresh RTCPeerConnection instead of reusing a broken one.
+      const failedPeer = callPeers.get(peerId);
+      if (failedPeer) {
+        failedPeer.pc.onicecandidate = null;
+        failedPeer.pc.ontrack = null;
+        failedPeer.pc.onconnectionstatechange = null;
+        failedPeer.pc.close();
+        callPeers.delete(peerId);
+      }
+
       const entry = callTiles.get(peerId);
-      if (!callPeers.has(peerId) && entry) {
+      if (entry) {
         entry.tile.remove();
         callTiles.delete(peerId);
       }
