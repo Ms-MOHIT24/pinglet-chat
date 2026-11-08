@@ -139,8 +139,9 @@ async function main() {
       "turn:turn.example.test:3478?transport=udp",
       "turns:turn.example.test:5349?transport=tcp"
     ]);
-    const [turnExpiry, turnUserId] = turnServer.username.split(":");
-    assert.equal(turnUserId, aliceId);
+    const [turnExpiry, turnNonce] = turnServer.username.split(":");
+    assert.match(turnNonce, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    assert.match(iceResponse.headers.get("cache-control") || "", /private,\\s*no-store/i);
     assert.ok(Number(turnExpiry) >= Math.floor(Date.now() / 1000) + turnTtlSeconds - 2);
     assert.ok(Number(turnExpiry) <= Math.floor(Date.now() / 1000) + turnTtlSeconds + 2);
     assert.equal(turnServer.credential, createHmac("sha1", turnSharedSecret).update(turnServer.username).digest("base64"));
