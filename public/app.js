@@ -4,7 +4,12 @@ let mode = "create", friends = [], privateKey = null, pendingSnakeInvite = null;
 const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
   (location.protocol === "https:" && location.hostname === "localhost" && !location.port) ||
   !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
-const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
+const configuredApiOrigin = window.PINGLET_CONFIG && typeof window.PINGLET_CONFIG.apiOrigin === "string"
+  ? window.PINGLET_CONFIG.apiOrigin.replace(/\/$/, "")
+  : "";
+const API_ORIGIN = isNativeShell
+  ? (configuredApiOrigin || "https://pinglet-chat-live.onrender.com")
+  : "";
 let messageSending = false;
 const messageDrafts = new Map();
 let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
@@ -821,7 +826,9 @@ function extractPingletCode(value) {
   if (/^[a-f0-9]{14}$/i.test(raw)) return raw.toUpperCase();
   try {
     const url = new URL(raw);
-    const isPingletOrigin = url.origin === location.origin || url.origin === "https://pinglet-chat-live.onrender.com";
+    const isPingletOrigin = url.origin === location.origin ||
+      url.origin === API_ORIGIN ||
+      url.origin === "https://pinglet-chat-live.onrender.com";
     const match = url.pathname.match(/^\/invite\/([a-f0-9]{14})\/?$/i);
     if (isPingletOrigin && match) return match[1].toUpperCase();
   } catch {}
