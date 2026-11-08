@@ -33,7 +33,7 @@ backup_dir="$(mktemp -d)"
 trap 'rm -rf "$backup_dir"' EXIT
 
 # Use client tools from the same PostgreSQL major image as the CI service.
-docker run --rm --network host \
+docker run --rm -i --network host \
   --env DATABASE_URL \
   --env RESTORE_DATABASE_URL \
   --volume "$backup_dir:/backup" \
