@@ -379,8 +379,8 @@ app.get("/api/messages/:peer", auth, async (req, res) => {
   const cursorClause = cursor ? " AND (created,id) < ($2::timestamptz,$3::uuid)" : "";
   const values = cursor ? [conversation, cursor.created, cursor.id] : [conversation];
   const result = await pool.query(
-    `SELECT id,sender,recipient,ciphertext,iv,created,
-       to_char(created AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created
+    `SELECT id,sender,recipient,ciphertext,iv,
+       to_char(created AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created
      FROM messages
      WHERE conversation=$1${cursorClause}
      ORDER BY created DESC,id DESC
@@ -392,9 +392,9 @@ app.get("/api/messages/:peer", auth, async (req, res) => {
   const page = result.rows.slice(0, pageSize);
   const oldest = page[page.length - 1];
   const nextCursor = hasMore && oldest
-    ? Buffer.from(JSON.stringify({ created: oldest.cursor_created, id: oldest.id })).toString("base64url")
+    ? Buffer.from(JSON.stringify({ created: oldest.created, id: oldest.id })).toString("base64url")
     : null;
-  const messages = page.map(({ cursor_created, ...message }) => message).reverse();
+  const messages = page.reverse();
   res.json({ messages, hasMore, nextCursor });
 });
 app.post("/api/messages", auth, termsRequired, async (req, res) => {
