@@ -12,7 +12,7 @@
 - [ ] Build and verify a signed Release AAB. The current workflow produced only a debug APK because adult-controlled upload-signing secrets are not configured.
 - [ ] Test the Android build on real devices (at least one current Android version and one older supported version).
 - [ ] Exercise sign-up, sign-in, friend request/accept/decline, QR camera and image import, chat text, voice notes, RPS, Snake Duel, voice call, video call, report, block, unblock, and in-app/external deletion manually.
-- [ ] Configure an approved TURN provider and the server-side `TURN_URLS` / `TURN_SHARED_SECRET` settings, then verify relayed calls on multiple networks. A credential endpoint is proposed in the current engineering PR, but no TURN provider is configured and restrictive networks may still fail.
+- [ ] Configure an approved TURN provider and the server-side `TURN_URLS` / `TURN_SHARED_SECRET` settings, then verify relayed calls on multiple networks. The combined engineering PR #4 adds short-lived server-issued TURN credentials, but no real TURN provider is configured and restrictive networks may still fail.
 - [ ] Verify the native app starts with the local bundled UI while the API is unavailable, then recovers when the backend wakes.
 - [ ] Verify invite links, camera/microphone permissions, keyboard behavior, screen readers, contrast, text scaling, and reduced motion on physical devices.
 
@@ -45,7 +45,7 @@
 ## Current known technical limitations
 
 1. The backend still runs on Render Free. The native UI is bundled locally, but user accounts, messages, games and calls still depend on the hosted API.
-2. Calls currently use STUN only. A server-side, short-lived TURN credential flow is proposed separately; it does not provide relay connectivity until an adult operator configures a trusted TURN service.
+2. The combined engineering PR #4 adds a server-side, short-lived TURN credential flow. Calls still use STUN until an adult operator configures a trusted TURN service and verifies real relayed calls.
 3. Call-room and Snake Duel live state is held in memory and can reset after a server restart or deploy.
 4. Message encryption is experimental and has not been independently audited; there is no verified identity-key exchange or cross-device private-key recovery.
 5. The report queue is protected by an environment secret, but an actual human moderation operation and public safety contact are not configured by code alone.

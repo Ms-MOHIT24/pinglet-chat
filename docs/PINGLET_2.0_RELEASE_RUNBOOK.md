@@ -14,6 +14,30 @@ This runbook is for the responsible adult service operator. It is not an authori
 - A green CI run is not proof of production health, human moderation, legal compliance, cryptographic security, or physical-device behavior.
 - Keep the package version at 1.9.0 until the 2.0 release candidate has passed all gates. Do not relabel a preview build as 2.0.
 
+## Availability and capacity planning
+
+The production Blueprint currently selects the Free web-service and Free PostgreSQL instance types. Treat this as a preview/hobby configuration, not a dependable production availability design.
+
+As checked against Render's current documentation on 9 November 2026:
+
+- A Free web service spins down after 15 minutes without inbound HTTP requests or WebSocket messages; the next request can take about one minute to wake it. Free web services also have a 750-hour monthly workspace allowance and can be suspended when that allowance is consumed.
+- A Free PostgreSQL database expires 30 days after creation, has a 1 GB storage cap, permits only one active Free database per workspace, and has no provider backups or managed connection pooling. After expiry there is a 14-day upgrade grace period before deletion.
+- Free PostgreSQL can be restarted for maintenance. A separate Free staging database cannot coexist with the existing Free production database in the same workspace.
+- Paid web-service instance types do not spin down. Paid database backup, retention and high-availability features depend on the selected plan; verify the currently offered features and price in the Render Dashboard before choosing.
+
+References: [Render Free limits](https://render.com/docs/free), [Render health checks](https://render.com/docs/health-checks), and [Render compute plans](https://render.com/docs/compute-plans).
+
+### Recommended availability design
+
+1. Keep a single paid web-service instance initially, with a non-sleeping plan selected against measured memory, CPU, concurrency and monthly budget. Do not add instances solely to claim higher availability.
+2. Move production PostgreSQL to a paid plan with provider backups/restore options and a retention policy the operator has checked. Complete a separate restore rehearsal before relying on it.
+3. Provision staging with a different database and unique secrets. Because the workspace already has a Free Postgres instance, staging needs a paid database plan or a separately approved workspace; do not delete or replace production to make room.
+4. Use Render's HTTP readiness check at `/health` (also available as `/readyz`); use `/livez` only for process liveness. Configure an external monitor and alert an accountable adult operator on repeated health failures, sustained elevated latency, deploy failures, or database expiry warnings.
+5. Keep horizontal scaling disabled until call-room and Snake Duel state no longer depends on process-local memory and Socket.IO has a supported cross-instance adapter/session strategy. Current in-memory sessions can end when the process restarts or a deploy occurs.
+6. Define an explicit availability target and maintenance/incident process with the service owner. Do not claim an uptime percentage or SLA until it is measured and backed by the actual hosting plan and monitoring data.
+
+Do not generate keep-alive traffic to bypass Free-plan spin-down. It does not solve database expiry, lack of backups, maintenance restarts, or real failover.
+
 ## Gate 1 — Database safety
 
 ### Required operator evidence
