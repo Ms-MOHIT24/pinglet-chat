@@ -51,7 +51,7 @@ jobs:
           node-version: 22
 
       - name: Install app dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Check JavaScript syntax
         run: >-
