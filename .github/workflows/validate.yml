@@ -61,7 +61,8 @@ jobs:
           node --check scripts/api-integration-check.js &&
           node --check scripts/configure-android-signing.js &&
           node --check scripts/copy-vendor.js &&
-          node --check scripts/configure-android-permissions.js
+          node --check scripts/configure-android-permissions.js &&
+          node --check scripts/configure-runtime.js
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
