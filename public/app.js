@@ -7,7 +7,7 @@ const isNativeShell = /^(capacitor|ionic):$/.test(location.protocol) ||
 const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : "";
 let messageSending = false;
 const messageDrafts = new Map();
-let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false };
+let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
 let reportTarget = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
@@ -452,7 +452,7 @@ function renderRequests(incoming, outgoing) {
 async function openPeer(friend) {
   const previousPeerId = peer?.id;
   if (previousPeerId !== friend.id) {
-    messageHistory = { peerId: friend.id, messages: [], nextCursor: null, hasMore: false, loading: false };
+    messageHistory = { peerId: friend.id, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
     $("#messages").replaceChildren();
     voiceObjectUrls.forEach(url => URL.revokeObjectURL(url));
     voiceObjectUrls.clear();
@@ -496,11 +496,15 @@ async function loadMessages({ older = false } = {}) {
   if (!peer) return;
   const activePeer = peer;
   if (messageHistory.peerId !== activePeer.id) {
-    messageHistory = { peerId: activePeer.id, messages: [], nextCursor: null, hasMore: false, loading: false };
+    messageHistory = { peerId: activePeer.id, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
   }
 
   const history = messageHistory;
-  if (history.loading || (older && !history.nextCursor)) return;
+  if (history.loading) {
+    if (!older) history.refreshPending = true;
+    return;
+  }
+  if (older && !history.nextCursor) return;
 
   const list = $("#messages");
   const previousHeight = list.scrollHeight;
@@ -519,10 +523,9 @@ async function loadMessages({ older = false } = {}) {
     const alreadyLoadedOlderPages = history.messages.length > incoming.length;
     const byId = new Map(history.messages.map(message => [message.id, message]));
     incoming.forEach(message => byId.set(message.id, message));
-    history.messages = [...byId.values()].sort((a, b) => {
-      const timeDifference = new Date(a.created).getTime() - new Date(b.created).getTime();
-      return timeDifference || String(a.id).localeCompare(String(b.id));
-    });
+    history.messages = [...byId.values()].sort((a, b) =>
+      String(a.created).localeCompare(String(b.created)) || String(a.id).localeCompare(String(b.id))
+    );
 
     if (older || !alreadyLoadedOlderPages) {
       history.nextCursor = data.nextCursor || null;
@@ -604,7 +607,10 @@ async function loadMessages({ older = false } = {}) {
   } finally {
     if (messageHistory === history) {
       history.loading = false;
+      const refreshPending = history.refreshPending;
+      history.refreshPending = false;
       updateMessageHistoryControl();
+      if (refreshPending && peer && peer.id === activePeer.id) loadMessages();
     }
   }
 }
