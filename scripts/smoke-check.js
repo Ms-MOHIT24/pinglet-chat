@@ -163,7 +163,7 @@ check("Dialogs expose managed focus, Escape and screen-reader state",
 
 check("Conversation history uses validated cursor pagination and a deterministic index",
   server.includes("msg_pair_cursor") &&
-  server.includes("cursor_created") &&
+  server.includes("to_char(created AT TIME ZONE") && server.includes("AS created") &&
   server.includes("ORDER BY created DESC,id DESC") &&
   server.includes("Invalid message-history cursor") &&
   app.includes("messageHistory") &&
