@@ -161,6 +161,16 @@ check("Dialogs expose managed focus, Escape and screen-reader state",
   app.includes('event.key === "Escape"') &&
   app.includes('event.key !== "Tab"'));
 
+check("Conversation history uses validated cursor pagination and a deterministic index",
+  server.includes("msg_pair_cursor") &&
+  server.includes("cursor_created") &&
+  server.includes("ORDER BY created DESC,id DESC") &&
+  server.includes("Invalid message-history cursor") &&
+  app.includes("messageHistory") &&
+  app.includes('loadMessages({ older: true })') &&
+  html.includes('id="loadOlderMessages"') &&
+  html.includes('id="messageHistoryControl"'));
+
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&
   html.includes("Voice-message audio is not attached"));
