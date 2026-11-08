@@ -176,8 +176,11 @@ check("Conversation history uses validated cursor pagination and a deterministic
 check("TURN credentials are minted server-side and used by WebRTC",
   server.includes('app.get("/api/calls/ice-servers"') &&
   server.includes('crypto.createHmac("sha1", TURN_SHARED_SECRET)') &&
+  server.includes('crypto.randomUUID()') &&
   server.includes('Cache-Control", "private, no-store"') &&
   app.includes('api("/calls/ice-servers")') &&
+  app.includes('data.turnConfigured !== true') &&
+  app.includes("getCallIceServers(generation)") &&
   app.includes("new RTCPeerConnection({ iceServers })") &&
   app.includes("callPeerPromises") &&
   app.includes("callSessionGeneration++") &&
