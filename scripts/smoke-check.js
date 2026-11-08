@@ -131,6 +131,15 @@ check("Android ships its own web UI instead of remote-loading the website",
   html.includes('src="/vendor/socket.io.js" defer') &&
   server.includes('"https://localhost"') &&
   server.includes('"https://pinglet-chat-live.onrender.com"'));
+check("Staging runtime config can target a separate API without changing production defaults",
+  html.includes('<script src="/runtime-config.js" defer></script>') &&
+  fs.existsSync(path.join(root, "public/runtime-config.js")) &&
+  fs.existsSync(path.join(root, "scripts/configure-runtime.js")) &&
+  app.includes("window.PINGLET_CONFIG") &&
+  app.includes("configuredApiOrigin") &&
+  server.includes("configuredPublicOrigin") &&
+  server.includes("allowedOrigins.has(origin)"));
+
 check("Android media permissions are included in generated native project",
   fs.existsSync(path.join(root, "scripts/configure-android-permissions.js")) &&
   ["android.permission.CAMERA", "android.permission.RECORD_AUDIO", "android.permission.MODIFY_AUDIO_SETTINGS"].every(permission =>
