@@ -9,6 +9,7 @@ let messageSending = false;
 const messageDrafts = new Map();
 let messageHistory = { peerId: null, messages: [], nextCursor: null, hasMore: false, loading: false, refreshPending: false };
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
+let callIceServersPromise = null, callPeerPromises = new Map();
 let reportTarget = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
 let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
@@ -1566,6 +1567,20 @@ function addCallTile(peerId, name, local = false, userId = null) {
   }
   return entry;
 }
+async function getCallIceServers() {
+  if (!callIceServersPromise) {
+    callIceServersPromise = api("/calls/ice-servers").then(data => {
+      const servers = Array.isArray(data.iceServers) ? data.iceServers : [];
+      return servers.length ? servers : [{ urls: "stun:stun.l.google.com:19302" }];
+    }).catch(error => {
+      console.warn("Could not load TURN relay settings; trying a direct STUN connection:", error);
+      setCallStatus("Relay settings unavailable · trying a direct connection");
+      return [{ urls: "stun:stun.l.google.com:19302" }];
+    });
+  }
+  return callIceServersPromise;
+}
+
 async function createCallPeer(peerId, peerName, initiator, userId = null) {
   if (!callCode || !peerId || !callStream) return;
   if (callPeers.has(peerId)) {
@@ -1577,40 +1592,72 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
     }
     return existing;
   }
-  const entry = addCallTile(peerId, peerName, false, userId);
-  const pc = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  });
-  const peer = { pc, entry, userId, pendingCandidates: [] };
-  callPeers.set(peerId, peer);
-  callStream.getTracks().forEach(track => pc.addTrack(track, callStream));
-  pc.onicecandidate = event => {
-    if (event.candidate && socket && socket.connected) {
-      socket.emit("call:signal", { toPeerId: peerId, candidate: event.candidate });
+  if (callPeerPromises.has(peerId)) {
+    const pending = await callPeerPromises.get(peerId);
+    if (pending && userId && !pending.userId) {
+      pending.userId = userId;
+      const tile = callTiles.get(peerId);
+      if (tile) addCallSafetyActions(tile, userId, peerName);
     }
-  };
-  pc.ontrack = event => {
-    const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
-    entry.media.srcObject = stream;
-    if (callMode === "video" && stream.getVideoTracks().length) {
-      entry.tile.classList.add("has-video");
-      stream.getVideoTracks().forEach(track => {
-        track.onmute = () => entry.tile.classList.remove("has-video");
-        track.onunmute = () => entry.tile.classList.add("has-video");
-      });
-    }
-    entry.media.play().catch(() => setCallStatus("Tap the page once to enable call audio."));
-  };
-  pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "failed") setCallStatus("Connection failed for " + peerName + ". Check the network and rejoin.");
-    else if (pc.connectionState === "connected") setCallStatus(peerName + " is connected · " + (1 + callPeers.size) + "/4 here");
-  };
-  if (initiator) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit("call:signal", { toPeerId: peerId, description: pc.localDescription });
+    return pending;
   }
-  return peer;
+
+  const creation = (async () => {
+    const iceServers = await getCallIceServers();
+    if (!callCode || !callStream) return null;
+    if (callPeers.has(peerId)) return callPeers.get(peerId);
+
+    const entry = addCallTile(peerId, peerName, false, userId);
+    const pc = new RTCPeerConnection({ iceServers });
+    const peer = { pc, entry, userId, pendingCandidates: [] };
+    callPeers.set(peerId, peer);
+    callStream.getTracks().forEach(track => pc.addTrack(track, callStream));
+    pc.onicecandidate = event => {
+      if (event.candidate && socket && socket.connected) {
+        socket.emit("call:signal", { toPeerId: peerId, candidate: event.candidate });
+      }
+    };
+    pc.ontrack = event => {
+      const stream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+      entry.media.srcObject = stream;
+      if (callMode === "video" && stream.getVideoTracks().length) {
+        entry.tile.classList.add("has-video");
+        stream.getVideoTracks().forEach(track => {
+          track.onmute = () => entry.tile.classList.remove("has-video");
+          track.onunmute = () => entry.tile.classList.add("has-video");
+        });
+      }
+      entry.media.play().catch(() => setCallStatus("Tap the page once to enable call audio."));
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "failed") setCallStatus("Connection failed for " + peerName + ". Check the network and rejoin.");
+      else if (pc.connectionState === "connected") setCallStatus(peerName + " is connected · " + (1 + callPeers.size) + "/4 here");
+    };
+    if (initiator) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (callCode && socket && socket.connected) {
+        socket.emit("call:signal", { toPeerId: peerId, description: pc.localDescription });
+      }
+    }
+    return peer;
+  })();
+
+  callPeerPromises.set(peerId, creation);
+  try {
+    return await creation;
+  } catch (error) {
+    const pending = callPeerPromises.get(peerId);
+    if (pending === creation) callPeerPromises.delete(peerId);
+    const entry = callTiles.get(peerId);
+    if (!callPeers.has(peerId) && entry) {
+      entry.tile.remove();
+      callTiles.delete(peerId);
+    }
+    throw error;
+  } finally {
+    if (callPeerPromises.get(peerId) === creation) callPeerPromises.delete(peerId);
+  }
 }
 async function handleCallSignal(payload) {
   if (!callCode || !payload || !payload.fromPeerId) return;
@@ -1654,6 +1701,8 @@ function showCallReaction(payload) {
 function resetCallUi() {
   callPeers.forEach(peer => peer.pc.close());
   callPeers.clear();
+  callPeerPromises.clear();
+  callIceServersPromise = null;
   callTiles.clear();
   if (callStream) callStream.getTracks().forEach(track => track.stop());
   callStream = null;
