@@ -146,4 +146,23 @@ check("Call rooms require a saved, non-blocked friendship",
   server.includes("removeBlockedPairFromCalls") &&
   server.includes("if (await areBlockedEither(sender.userId, recipient.userId)) return"));
 
+check("Remote call tiles offer accessible report and block actions",
+  app.includes("function addCallSafetyActions") &&
+  app.includes("function blockCallParticipant") &&
+  app.includes('openReportModal("Reported from a live call."') &&
+  app.includes("person.userId") &&
+  app.includes("reportTarget = { id: target.id, name: target.name"));
+
+check("Dialogs expose managed focus, Escape and screen-reader state",
+  app.includes("function setupModalAccessibility") &&
+  app.includes("aria-modal") &&
+  app.includes("aria-hidden") &&
+  app.includes("focusRestore") &&
+  app.includes('event.key === "Escape"') &&
+  app.includes('event.key !== "Tab"'));
+
+check("Voice-message reports explain that audio is not attached",
+  app.includes("The audio itself is not attached to this report") &&
+  html.includes("Voice-message audio is not attached"));
+
 process.stdout.write("\nPinglet feature smoke-check completed successfully.\n");

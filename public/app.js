@@ -8,6 +8,7 @@ const API_ORIGIN = isNativeShell ? "https://pinglet-chat-live.onrender.com" : ""
 let messageSending = false;
 const messageDrafts = new Map();
 let callCode = null, callMode = null, callStream = null, callPeers = new Map(), callTiles = new Map(), callBusy = false;
+let reportTarget = null;
 let snakePeerId = null, snakeState = null, activeFriendFilter = "all", sparkIndex = 0;
 let qrStream = null, qrFrameId = 0, qrLastFrameAt = 0, qrFrameBusy = false;
 let qrDetector = null, qrTrack = null, qrTorchOn = false, pendingScannedCode = null;
@@ -287,7 +288,7 @@ async function boot() {
 
     socket.on("call:participant-joined", person => {
       if (!callCode || !person || !person.peerId) return;
-      createCallPeer(person.peerId, person.name || "A Pinglet friend", false).catch(error => {
+      createCallPeer(person.peerId, person.name || "A Pinglet friend", false, person.userId).catch(error => {
         console.warn("Could not prepare call connection:", error);
         setCallStatus("Couldn't connect to " + (person.name || "a participant") + ".");
       });
@@ -511,7 +512,7 @@ async function loadMessages() {
         reportButton.addEventListener("click", () => {
           const sentAt = new Date(message.created).toLocaleString();
           const evidence = clear.startsWith("PINGLET_VOICE_V1|")
-            ? "Voice message from " + activePeer.name + " at " + sentAt + "."
+            ? "Voice message from " + activePeer.name + " at " + sentAt + ". The audio itself is not attached to this report; describe the concern in the details field."
             : clear.startsWith("Unable to decrypt")
               ? ""
               : ("Message from " + activePeer.name + ": " + clear.slice(0, 2500));
@@ -1021,10 +1022,11 @@ $("#roomsNav").addEventListener("click", event => {
   $("#contextTitle").textContent = "Voice and video rooms.";
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
-function openReportModal(evidence = "") {
-  if (!peer) return;
+function openReportModal(evidence = "", target = peer) {
+  if (!target || !target.id) return;
+  reportTarget = { id: target.id, name: target.name || "this account" };
   $("#reportModal").classList.remove("hidden");
-  $("#reportTitle").textContent = "Report " + peer.name;
+  $("#reportTitle").textContent = "Report " + reportTarget.name;
   $("#reportCategory").value = "";
   $("#reportDetails").value = evidence;
   $("#reportError").textContent = "";
@@ -1047,17 +1049,18 @@ $("#blockPeer").addEventListener("click", async () => {
     toast(target.name + " has been blocked.");
   } catch (error) { toast(error.message); }
 });
-$("#reportClose").addEventListener("click", () => $("#reportModal").classList.add("hidden"));
-$("#reportModal").addEventListener("click", event => { if (event.target.id === "reportModal") $("#reportModal").classList.add("hidden"); });
+$("#reportClose").addEventListener("click", () => { reportTarget = null; $("#reportModal").classList.add("hidden"); });
+$("#reportModal").addEventListener("click", event => { if (event.target.id === "reportModal") { reportTarget = null; $("#reportModal").classList.add("hidden"); } });
 $("#reportForm").addEventListener("submit", async event => {
   event.preventDefault();
-  if (!peer) return;
-  const activePeer = peer;
+  if (!reportTarget) return;
+  const activePeer = reportTarget;
   const button = $("#submitReport");
   button.disabled = true;
   $("#reportError").textContent = "";
   try {
     await api("/reports", { method: "POST", body: JSON.stringify({ reportedUserId: activePeer.id, category: $("#reportCategory").value, details: $("#reportDetails").value }) });
+    reportTarget = null;
     $("#reportModal").classList.add("hidden");
     toast("Report submitted. Thank you for helping keep Pinglet safe.");
   } catch (error) { $("#reportError").textContent = error.message; }
@@ -1420,13 +1423,44 @@ function enterCallRoom(data) {
   addCallTile(socket.id, me.name + " (you)", true);
   setCallStatus("Room is ready · Share the four-digit code · 1/4 here");
   (data.participants || []).forEach(person => {
-    createCallPeer(person.peerId, person.name || "A Pinglet friend", true).catch(error => {
+    createCallPeer(person.peerId, person.name || "A Pinglet friend", true, person.userId).catch(error => {
       console.warn("Call peer setup failed:", error);
       setCallStatus("Could not connect to " + (person.name || "a participant") + ".");
     });
   });
 }
-function addCallTile(peerId, name, local = false) {
+function addCallSafetyActions(entry, userId, name) {
+  if (!userId || entry.tile.querySelector(".call-safety-actions")) return;
+  const actions = document.createElement("div");
+  actions.className = "call-safety-actions";
+  const report = document.createElement("button");
+  report.type = "button";
+  report.className = "call-report-peer";
+  report.textContent = "Report";
+  report.setAttribute("aria-label", "Report " + name + " from this call");
+  report.addEventListener("click", () => openReportModal("Reported from a live call.", { id: userId, name }));
+  const block = document.createElement("button");
+  block.type = "button";
+  block.className = "call-block-peer";
+  block.textContent = "Block";
+  block.setAttribute("aria-label", "Block " + name + " and leave this call");
+  block.addEventListener("click", () => blockCallParticipant(userId, name));
+  actions.append(report, block);
+  entry.tile.appendChild(actions);
+}
+async function blockCallParticipant(userId, name) {
+  if (!userId || userId === me.id) return;
+  if (!window.confirm("Block " + name + "? You will leave this call, and this person will no longer be able to message you or join your call rooms.")) return;
+  try {
+    await api("/users/" + userId + "/block", { method: "POST", body: "{}" });
+    if (socket && socket.connected && callCode) socket.emit("call:leave");
+    resetCallUi();
+    await loadFriends();
+    await loadRequests();
+    toast(name + " has been blocked. You left the call.");
+  } catch (error) { toast(error.message || "Could not block this account."); }
+}
+function addCallTile(peerId, name, local = false, userId = null) {
   if (callTiles.has(peerId)) return callTiles.get(peerId);
   const tile = document.createElement("article");
   tile.className = "call-tile" + (local ? " is-local" : "");
@@ -1447,6 +1481,7 @@ function addCallTile(peerId, name, local = false) {
   tile.append(mediaWrap, nameTag);
   $("#callGrid").appendChild(tile);
   const entry = { tile, media, avatar, nameTag };
+  if (!local) addCallSafetyActions(entry, userId, nameTag.textContent);
   callTiles.set(peerId, entry);
   if (local && callStream) {
     media.srcObject = callStream;
@@ -1455,14 +1490,22 @@ function addCallTile(peerId, name, local = false) {
   }
   return entry;
 }
-async function createCallPeer(peerId, peerName, initiator) {
+async function createCallPeer(peerId, peerName, initiator, userId = null) {
   if (!callCode || !peerId || !callStream) return;
-  if (callPeers.has(peerId)) return callPeers.get(peerId);
-  const entry = addCallTile(peerId, peerName, false);
+  if (callPeers.has(peerId)) {
+    const existing = callPeers.get(peerId);
+    if (userId && !existing.userId) {
+      existing.userId = userId;
+      const tile = callTiles.get(peerId);
+      if (tile) addCallSafetyActions(tile, userId, peerName);
+    }
+    return existing;
+  }
+  const entry = addCallTile(peerId, peerName, false, userId);
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
   });
-  const peer = { pc, entry, pendingCandidates: [] };
+  const peer = { pc, entry, userId, pendingCandidates: [] };
   callPeers.set(peerId, peer);
   callStream.getTracks().forEach(track => pc.addTrack(track, callStream));
   pc.onicecandidate = event => {
@@ -1710,3 +1753,73 @@ $("#modalForm").addEventListener("submit", async event => {
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Pinglet offline shell unavailable:", error)));
 }
+
+
+/* Shared dialog focus, keyboard and screen-reader behavior. */
+function setupModalAccessibility() {
+  const dialogs = [...document.querySelectorAll(".modal")];
+  const focusRestore = new WeakMap();
+  const openDialogs = () => dialogs.filter(dialog => !dialog.classList.contains("hidden"));
+  const focusableIn = dialog => [...dialog.querySelectorAll(
+    'button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])'
+  )].filter(element => !element.closest(".hidden") && element.getClientRects().length > 0);
+
+  dialogs.forEach(dialog => {
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-hidden", String(dialog.classList.contains("hidden")));
+    if (!dialog.hasAttribute("aria-labelledby")) {
+      const heading = dialog.querySelector("h1,h2,h3");
+      if (heading) {
+        if (!heading.id) heading.id = dialog.id + "AccessibleTitle";
+        dialog.setAttribute("aria-labelledby", heading.id);
+      }
+    }
+    const observer = new MutationObserver(() => {
+      if (dialog.classList.contains("hidden")) {
+        dialog.setAttribute("aria-hidden", "true");
+        const previous = focusRestore.get(dialog);
+        focusRestore.delete(dialog);
+        if (previous && previous.isConnected && typeof previous.focus === "function") previous.focus();
+        return;
+      }
+      dialog.setAttribute("aria-hidden", "false");
+      if (!focusRestore.has(dialog)) focusRestore.set(dialog, document.activeElement);
+      const first = focusableIn(dialog)[0];
+      const target = first || dialog.querySelector(".modal-card") || dialog;
+      if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      requestAnimationFrame(() => { if (!dialog.classList.contains("hidden")) target.focus(); });
+    });
+    observer.observe(dialog, { attributes: true, attributeFilter: ["class"] });
+  });
+
+  document.addEventListener("keydown", event => {
+    const dialog = openDialogs().at(-1);
+    if (!dialog) return;
+    if (event.key === "Escape") {
+      const closeButton = dialog.querySelector(".modal-close,button[id$='Close'],button[id$='close']");
+      if (closeButton) {
+        event.preventDefault();
+        closeButton.click();
+      } else if (dialog.id !== "termsModal") {
+        event.preventDefault();
+        dialog.classList.add("hidden");
+      }
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusables = focusableIn(dialog);
+    if (!focusables.length) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+      event.preventDefault(); first.focus();
+    }
+  });
+}
+setupModalAccessibility();
