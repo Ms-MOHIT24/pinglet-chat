@@ -512,7 +512,7 @@ async function loadMessages() {
         reportButton.addEventListener("click", () => {
           const sentAt = new Date(message.created).toLocaleString();
           const evidence = clear.startsWith("PINGLET_VOICE_V1|")
-            ? "Voice message from " + activePeer.name + " at " + sentAt + "."
+            ? "Voice message from " + activePeer.name + " at " + sentAt + ". The audio itself is not attached to this report; describe the concern in the details field."
             : clear.startsWith("Unable to decrypt")
               ? ""
               : ("Message from " + activePeer.name + ": " + clear.slice(0, 2500));
