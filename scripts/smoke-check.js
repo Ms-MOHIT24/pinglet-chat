@@ -68,7 +68,7 @@ check("Chat drafts stay with their friend and empty messages cannot be sent",
   html.includes('title="Write a message to enable sending" disabled'));
 check("Backend readiness is verified before account creation, sign-in and session restore",
   app.includes("async function probeBackendReady") &&
-  app.includes("async function ensureBackendReady") &&
+  app.includes("function ensureBackendReady()") &&
   app.includes('await ensureBackendReady()') &&
   app.includes('"/health"') &&
   app.includes('data.database === "connected"') &&
