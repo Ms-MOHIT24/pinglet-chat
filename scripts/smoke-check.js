@@ -97,6 +97,8 @@ check("Mobile navigation keeps primary tabs readable and groups secondary settin
   html.includes('id="moreModal"') &&
   ["moreAppearance", "moreSafety", "moreLogout"].every(id => html.includes('id="' + id + '"')) &&
   app.includes("function openMoreMenu()") &&
+  app.includes('trigger.classList.add("active")') &&
+  app.includes('trigger.classList.remove("active")') &&
   app.includes('$("#moreSafety").addEventListener') &&
   app.includes('$("#moreLogout").addEventListener') &&
   css.includes("grid-template-columns:repeat(5,minmax(0,1fr))") &&
