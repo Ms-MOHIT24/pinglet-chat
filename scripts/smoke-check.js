@@ -66,12 +66,15 @@ check("Chat drafts stay with their friend and empty messages cannot be sent",
   app.includes("messageSending = true") &&
   app.includes("updateComposerState()") &&
   html.includes('title="Write a message to enable sending" disabled'));
-check("Backend readiness is verified before account creation and sign-in",
+check("Backend readiness is verified before account creation, sign-in and session restore",
   app.includes("async function probeBackendReady") &&
   app.includes("async function ensureBackendReady") &&
   app.includes('await ensureBackendReady()') &&
   app.includes('"/health"') &&
-  app.includes('data.database === "connected"'));
+  app.includes('data.database === "connected"') &&
+  app.includes('$("#retrySession").addEventListener') &&
+  app.includes('retrySession.classList.toggle("hidden"') &&
+  html.includes('id="retrySession"'));
 
 check("Read-only API requests retry transient wake-up errors",
   app.includes("const canRetry = method === \"GET\"") &&
