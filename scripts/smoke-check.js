@@ -88,10 +88,11 @@ check("Shared web and Android motion system",
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
 check("Service-worker cache version is current and interactive assets refresh from network",
-  /CACHE_NAME = "pinglet-shell-v16"/.test(sw) &&
+  /CACHE_NAME = "pinglet-shell-v17"/.test(sw) &&
   sw.includes("NETWORK_FIRST_ASSETS") &&
   sw.includes('fetch(request, { cache: "no-store" })') &&
-  sw.includes('url.pathname.startsWith("/api/")'));
+  sw.includes('url.pathname.startsWith("/api/")') &&
+  sw.includes('["/health", "/readyz", "/livez"].includes(url.pathname)'));
 
 
 check("Terms acceptance is required for account creation and social writes",
