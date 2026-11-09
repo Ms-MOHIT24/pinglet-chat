@@ -311,6 +311,9 @@ $("#retrySession").addEventListener("click", async () => {
   try {
     await ensureBackendReady();
     await boot();
+  } catch {
+    $("#authError").textContent = "Pinglet could not reconnect. Please check your connection and try again.";
+    $("#authHint").textContent = "Your saved session is still on this device. Try again when Pinglet is available.";
   } finally {
     button.disabled = false;
   }
