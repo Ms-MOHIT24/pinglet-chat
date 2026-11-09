@@ -94,6 +94,12 @@ async function register(name, password, termsAccepted = true) {
     }
   });
 }
+async function login(code, password) {
+  return request("/api/login", {
+    method: "POST",
+    body: { code, password }
+  });
+}
 async function main() {
   assert.ok(process.env.DATABASE_URL, "DATABASE_URL must point to the CI PostgreSQL service.");
   testPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
@@ -173,6 +179,23 @@ async function main() {
     assert.ok(alice.data.token && alice.data.user.id && alice.data.user.code);
     const aliceToken = alice.data.token;
     const aliceId = alice.data.user.id;
+
+    const loginSuccess = await login("  " + alice.data.user.code.toLowerCase() + "  ", "alice-password-123");
+    assert.equal(loginSuccess.status, 200);
+    assert.equal(loginSuccess.data.user.id, aliceId);
+    assert.ok(loginSuccess.data.token);
+    const loginProfile = await request("/api/me", { token: loginSuccess.data.token });
+    assert.equal(loginProfile.status, 200);
+    assert.equal(loginProfile.data.user.code, alice.data.user.code);
+    pass("Existing-account sign-in accepts a copied friend code with spaces and mixed case");
+
+    const wrongPassword = await login(alice.data.user.code, "incorrect-password");
+    assert.equal(wrongPassword.status, 401);
+    assert.equal(wrongPassword.data.error, "Friend code or password is incorrect.");
+    const unknownCode = await login("FFFFFFFFFFFFFF", "alice-password-123");
+    assert.equal(unknownCode.status, 401);
+    assert.equal(unknownCode.data.error, wrongPassword.data.error);
+    pass("Sign-in rejects incorrect credentials with the same safe response");
 
     const iceAnonymous = await request("/api/calls/ice-servers");
     assert.equal(iceAnonymous.status, 401);
