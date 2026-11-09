@@ -289,7 +289,7 @@ $("#authForm").addEventListener("submit", async (event) => {
       const data = await api("/login", { method: "POST", body: JSON.stringify({ code: $("#code").value, password: $("#password").value }) });
       privateKey = await readPrivateKey(data.user.id);
       if (!privateKey) {
-        $("#authError").textContent = "This browser has no saved encryption key for this account. Device recovery is not available in this demo.";
+        $("#authError").textContent = "Your friend code and password were accepted, but this browser does not have the encryption key for this account. Use the browser or device where you created the account; cross-device key recovery is not available yet.";
         return;
       }
       await finishLogin(data);
