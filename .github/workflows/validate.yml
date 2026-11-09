@@ -55,6 +55,9 @@ jobs:
       - name: Install app dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Audit dependency vulnerabilities
+        run: npm audit --audit-level=low
+
       - name: Check JavaScript syntax
         run: >-
           node --check lib/origin-policy.js &&
