@@ -75,16 +75,25 @@
 
 ## Current engineering follow-up
 
-A separate corrective branch, `fix/pinglet-post-merge-review-2026-11-09`, addresses findings from the post-merge review:
+The corrective changes are in open PR #6 on `fix/pinglet-post-merge-review-2026-11-09`. The PR is not merged or deployed. Its current head is `b418e9b6c83ac2fc0e9d11d49adc8fba8f2f9329`.
+
+The change set covers:
 - close and remove partially-created WebRTC peers when connection setup fails;
 - strictly parse TURN URIs and reject embedded credentials, malformed hosts/ports and unsupported query parameters;
-- constrain the disposable backup/restore rehearsal to the GitHub Actions CI environment and exact fixture database names/port/user;
+- constrain the disposable backup/restore rehearsal to GitHub Actions CI and the exact fixture database names, loopback host, port and user;
 - reject non-default HTTPS ports in Android API-origin configuration;
-- add regression checks for the above;
-- trigger main validation and Android preview workflows when `lib/**` changes.
+- add regression checks for those cases;
+- trigger main validation and Android preview workflows when `lib/**` changes;
+- improve cold-start readiness checks and saved-session retry feedback;
+- refresh interactive service-worker assets network-first;
+- simplify mobile navigation by grouping secondary controls in More.
 
-These fixes are in draft PR #6 and are not merged or deployed. GitHub Actions validation run [#63](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42517745384) passed on exact PR head `943557f85ae060248b3edc36565f41bef52f3dcd`, including syntax, smoke, PostgreSQL API integration, Android runtime/CSP checks and the CI-only backup/restore rehearsal. This is CI evidence only; independent human review and an Android preview build of the corrective branch are still outstanding.
+GitHub Actions validation run [#76](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42613245089) passed on the exact PR head above. Its job completed successfully, including JavaScript syntax, feature smoke checks, PostgreSQL-backed API integration, Android runtime/CSP generation checks, and the CI-only disposable database backup/restore rehearsal.
 
+A follow-up commit also makes a failed saved-session reconnect show a clear retry message. The same run #76 validates that change through the added smoke assertion.
+
+**Still outstanding:** no human review or inline review threads are recorded on PR #6; the Android APK/AAB workflow was not run on this PR head; no signed Play Store AAB or physical-device acceptance test is available; no production database backup/restore or external production-health verification has been completed. The successful CI run is engineering evidence, not release approval.
+ 
 ## Safe test instructions
 
 - Use staging and disposable accounts only.
