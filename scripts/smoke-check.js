@@ -91,6 +91,17 @@ check("Shared web and Android motion system",
   css.includes("pinglet-message-in") &&
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
+check("Mobile navigation keeps primary tabs readable and groups secondary settings in More",
+  html.includes('id="moreNav"') &&
+  html.includes('aria-controls="moreModal"') &&
+  html.includes('id="moreModal"') &&
+  ["moreAppearance", "moreSafety", "moreLogout"].every(id => html.includes('id="' + id + '"')) &&
+  app.includes("function openMoreMenu()") &&
+  app.includes('$("#moreSafety").addEventListener') &&
+  app.includes('$("#moreLogout").addEventListener') &&
+  css.includes("grid-template-columns:repeat(5,minmax(0,1fr))") &&
+  css.includes("#themesNav,#safetyNav,#logout{display:none!important}") &&
+  css.includes("#moreNav{display:flex!important}"));
 check("Service-worker cache version is current and interactive assets refresh from network",
   /CACHE_NAME = "pinglet-shell-v17"/.test(sw) &&
   sw.includes("NETWORK_FIRST_ASSETS") &&
