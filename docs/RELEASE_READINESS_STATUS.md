@@ -57,6 +57,7 @@
 
 ### 4. Security, privacy and policy
 
+- [x] Dependency audit: `npm audit --audit-level=low` passed on run [#79](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42613545842) on the current dependency lockfile; the log reported **0 vulnerabilities**.
 - [ ] Commission independent review of experimental ECDH/AES-GCM encryption and public-key identity verification.
 - [ ] Review password/session lifecycle, account deletion, backup retention and recovery behavior.
 - [ ] Have qualified reviewers finalise the Privacy Policy, Terms, age rules, consent decisions, data inventory and Data Safety declarations.
@@ -75,7 +76,7 @@
 
 ## Current engineering follow-up
 
-The corrective changes are in open PR #6 on `fix/pinglet-post-merge-review-2026-11-09`. The PR is not merged or deployed. Its current head is `b418e9b6c83ac2fc0e9d11d49adc8fba8f2f9329`.
+The corrective changes are in open PR #6 on `fix/pinglet-post-merge-review-2026-11-09`. The PR is not merged or deployed. The current head after the dependency-audit workflow change is `acf5ce9826b0e456e0afd28a87391fc6e56f46fc`.
 
 The change set covers:
 - close and remove partially-created WebRTC peers when connection setup fails;
@@ -86,11 +87,10 @@ The change set covers:
 - trigger main validation and Android preview workflows when `lib/**` changes;
 - improve cold-start readiness checks and saved-session retry feedback;
 - refresh interactive service-worker assets network-first;
-- simplify mobile navigation by grouping secondary controls in More.
+- simplify mobile navigation by grouping secondary controls in More;
+- run a full lockfile-based npm dependency audit during validation.
 
-GitHub Actions validation run [#76](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42613245089) passed on the exact PR head above. Its job completed successfully, including JavaScript syntax, feature smoke checks, PostgreSQL-backed API integration, Android runtime/CSP generation checks, and the CI-only disposable database backup/restore rehearsal.
-
-A follow-up commit also makes a failed saved-session reconnect show a clear retry message. The same run #76 validates that change through the added smoke assertion.
+GitHub Actions validation run [#79](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42613545842) passed on commit `acf5ce9826b0e456e0afd28a87391fc6e56f46fc`. The audit step reported **0 vulnerabilities**. The complete job also passed JavaScript syntax, feature smoke checks, PostgreSQL-backed API integration, Android runtime/CSP generation checks, and the CI-only disposable database backup/restore rehearsal.
 
 **Still outstanding:** no human review or inline review threads are recorded on PR #6; the Android APK/AAB workflow was not run on this PR head; no signed Play Store AAB or physical-device acceptance test is available; no production database backup/restore or external production-health verification has been completed. The successful CI run is engineering evidence, not release approval.
  
