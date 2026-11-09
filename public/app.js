@@ -242,6 +242,8 @@ function setConnectionStatus(label, connected) {
 }
 function show(view) {
   if (view !== "chat" && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
+  $("#moreModal")?.classList.add("hidden");
+  $("#moreNav")?.setAttribute("aria-expanded", "false");
   ["welcome", "chat", "games", "callRooms"].forEach(id => $("#" + id).classList.toggle("hidden", id !== (view === "rooms" ? "callRooms" : view)));
   document.body.dataset.view = view;
   const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
@@ -1138,6 +1140,7 @@ document.addEventListener("keydown", event => {
     $("#modal").classList.add("hidden");
     $("#themeModal").classList.add("hidden");
     closeQrScanner();
+    if (!$("#moreModal").classList.contains("hidden")) closeMoreMenu(true);
     $("#requests").classList.remove("mobile-open");
   }
 });
@@ -1186,6 +1189,44 @@ $("#roomsNav").addEventListener("click", event => {
   show("rooms");
   $("#contextEyebrow").textContent = "YOUR PRIVATE HANGOUT";
   $("#contextTitle").textContent = "Voice and video rooms.";
+});
+
+function closeMoreMenu(restoreFocus = false) {
+  const modal = $("#moreModal");
+  const trigger = $("#moreNav");
+  if (modal) modal.classList.add("hidden");
+  if (trigger) {
+    trigger.setAttribute("aria-expanded", "false");
+    if (restoreFocus) trigger.focus();
+  }
+}
+function openMoreMenu() {
+  const modal = $("#moreModal");
+  const trigger = $("#moreNav");
+  if (!modal || !trigger) return;
+  modal.classList.remove("hidden");
+  trigger.setAttribute("aria-expanded", "true");
+  $("#moreAppearance").focus();
+}
+$("#moreNav").addEventListener("click", () => {
+  if ($("#moreModal").classList.contains("hidden")) openMoreMenu();
+  else closeMoreMenu(true);
+});
+$("#moreClose").addEventListener("click", () => closeMoreMenu(true));
+$("#moreModal").addEventListener("click", event => {
+  if (event.target.id === "moreModal") closeMoreMenu(true);
+});
+$("#moreAppearance").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#themesNav").click();
+});
+$("#moreSafety").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#safetyNav").click();
+});
+$("#moreLogout").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#logout").click();
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
 function openReportModal(evidence = "", target = peer) {
