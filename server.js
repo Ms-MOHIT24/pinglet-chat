@@ -234,14 +234,17 @@ app.post("/api/register", authLimiter, async (req, res) => {
 });
 app.post("/api/login", authLimiter, async (req, res) => {
   try {
-    const code = typeof req.body.code === "string" ? req.body.code.toUpperCase() : "";
+    const code = typeof req.body.code === "string" ? req.body.code.trim().toUpperCase() : "";
     const result = await pool.query("SELECT * FROM users WHERE code=$1", [code]);
     const user = result.rows[0];
     if (!user || typeof req.body.password !== "string" || !await bcrypt.compare(req.body.password, user.password)) {
       return res.status(401).json({ error: "Friend code or password is incorrect." });
     }
     res.json({ token: tokenFor(user), user: { id: user.id, name: user.name, code: user.code, pubkey: user.pubkey } });
-  } catch { res.status(400).json({ error: "Invalid sign-in request." }); }
+  } catch (error) {
+    console.error("Sign-in failed:", error.message);
+    res.status(500).json({ error: "Could not sign in right now. Please try again." });
+  }
 });
 app.get("/api/me", auth, async (req, res) => {
   const result = await pool.query("SELECT id,name,code,pubkey,(terms_accepted_at IS NOT NULL) AS \"termsAccepted\" FROM users WHERE id=$1", [req.user.id]);
