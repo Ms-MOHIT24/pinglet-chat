@@ -242,8 +242,7 @@ function setConnectionStatus(label, connected) {
 }
 function show(view) {
   if (view !== "chat" && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
-  $("#moreModal")?.classList.add("hidden");
-  $("#moreNav")?.setAttribute("aria-expanded", "false");
+  closeMoreMenu();
   ["welcome", "chat", "games", "callRooms"].forEach(id => $("#" + id).classList.toggle("hidden", id !== (view === "rooms" ? "callRooms" : view)));
   document.body.dataset.view = view;
   const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
@@ -1197,6 +1196,7 @@ function closeMoreMenu(restoreFocus = false) {
   if (modal) modal.classList.add("hidden");
   if (trigger) {
     trigger.setAttribute("aria-expanded", "false");
+    trigger.classList.remove("active");
     if (restoreFocus) trigger.focus();
   }
 }
@@ -1206,6 +1206,7 @@ function openMoreMenu() {
   if (!modal || !trigger) return;
   modal.classList.remove("hidden");
   trigger.setAttribute("aria-expanded", "true");
+  trigger.classList.add("active");
   $("#moreAppearance").focus();
 }
 $("#moreNav").addEventListener("click", () => {
