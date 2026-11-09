@@ -1,4 +1,4 @@
-const CACHE_NAME = "pinglet-shell-v16";
+const CACHE_NAME = "pinglet-shell-v17";
 const APP_SHELL = ["/", "/style.css", "/app.js", "/vendor/socket.io.js", "/vendor/jsQR.js", "/terms.html", "/privacy.html", "/child-safety.html", "/delete-account.html", "/icon.svg", "/manifest.webmanifest"];
 const NETWORK_FIRST_ASSETS = new Set(["/app.js", "/style.css", "/vendor/socket.io.js", "/vendor/jsQR.js"]);
 
@@ -19,6 +19,7 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/socket.io/")) return;
+  if (["/health", "/readyz", "/livez"].includes(url.pathname)) return;
 
   if (request.mode === "navigate") {
     event.respondWith(fetch(request, { cache: "no-store" }).then(response => {
