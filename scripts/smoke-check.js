@@ -78,6 +78,7 @@ check("Backend readiness is verified before account creation, sign-in and sessio
   app.includes('data.database === "connected"') &&
   app.includes('$("#retrySession").addEventListener') &&
   app.includes('retrySession.classList.toggle("hidden"') &&
+  app.includes("Your saved session is still on this device") &&
   html.includes('id="retrySession"'));
 
 check("Read-only API requests retry transient wake-up errors",
