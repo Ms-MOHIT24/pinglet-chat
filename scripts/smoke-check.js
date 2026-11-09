@@ -66,6 +66,10 @@ check("Chat drafts stay with their friend and empty messages cannot be sent",
   app.includes("messageSending = true") &&
   app.includes("updateComposerState()") &&
   html.includes('title="Write a message to enable sending" disabled'));
+check("Sign-in explains when a password is accepted but the local encryption key is missing",
+  app.includes("Your friend code and password were accepted") &&
+  app.includes("Use the browser or device where you created the account"));
+
 check("Backend readiness is verified before account creation, sign-in and session restore",
   app.includes("async function probeBackendReady") &&
   app.includes("function ensureBackendReady()") &&
