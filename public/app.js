@@ -70,6 +70,62 @@ async function api(path, options = {}) {
 
   throw lastError || new Error("Pinglet is taking longer than expected to respond. Please retry.");
 }
+// Warm Render's web service and database before the first account write. This is
+// intentionally a read-only probe: registration/login are never blindly retried,
+// so a slow response cannot create duplicate accounts or repeat a mutation.
+let backendReadyUntil = 0;
+let backendReadyPromise = null;
+async function probeBackendReady() {
+  const retryDelays = [1200, 2400, 4000, 6000, 8000, 10000];
+  const healthUrl = (API_ORIGIN || location.origin) + "/health";
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    try {
+      const response = await fetch(healthUrl, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.ok === true && data.database === "connected") {
+        backendReadyUntil = Date.now() + 45000;
+        return data;
+      }
+
+      const error = new Error(
+        response.status === 503
+          ? "Pinglet is waking up. Please try again shortly."
+          : "Pinglet could not confirm that the service is ready."
+      );
+      error.status = response.status;
+      if (![502, 503, 504].includes(response.status) || attempt === retryDelays.length) throw error;
+      lastError = error;
+    } catch (error) {
+      const isTransientNetworkError = !Number.isInteger(error.status) &&
+        (error instanceof TypeError || error.name === "AbortError" || error.name === "NetworkError");
+      if (!isTransientNetworkError && ![502, 503, 504].includes(error.status)) throw error;
+      if (attempt === retryDelays.length) throw error;
+      lastError = error;
+    }
+
+    if (attempt === 0) {
+      const hint = $("#authHint");
+      if (hint) hint.textContent = "Waking up Pinglet… your account details have not been submitted yet.";
+    }
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+  }
+
+  throw lastError || new Error("Pinglet is still waking up. Please try again in a moment.");
+}
+function ensureBackendReady() {
+  if (Date.now() < backendReadyUntil) return Promise.resolve();
+  if (!backendReadyPromise) {
+    backendReadyPromise = probeBackendReady().finally(() => { backendReadyPromise = null; });
+  }
+  return backendReadyPromise;
+}
+
 function bytesToBase64(value) { return btoa(String.fromCharCode(...new Uint8Array(value))); }
 function base64ToBytes(value) { return Uint8Array.from(atob(value), c => c.charCodeAt(0)); }
 
@@ -219,6 +275,9 @@ $("#authForm").addEventListener("submit", async (event) => {
   $("#authError").textContent = "";
   $("#authSubmit").disabled = true;
   try {
+    $("#authHint").textContent = "Connecting to Pinglet…";
+    await ensureBackendReady();
+    $("#authHint").textContent = mode === "create" ? "Service ready. Creating your account…" : "Service ready. Signing you in…";
     if (mode === "create") {
       const pair = await generateKeys();
       const pubkey = await exportPublicKey(pair.publicKey);
@@ -1826,6 +1885,20 @@ function drawSnake() {
 if (token) boot();
 else if (sessionStorage.getItem("pinglet_pending_invite")) {
   $("#authHint").textContent = "You have a friend invite waiting. Create an account or sign in to send your request.";
+}
+
+// Start a non-blocking health check while a signed-out visitor reads the form.
+// The submit handler shares this promise and waits for database readiness.
+if (!token) {
+  ensureBackendReady().then(() => {
+    if (!sessionStorage.getItem("pinglet_pending_invite") && !$("#authError").textContent) {
+      $("#authHint").textContent = "Pinglet is ready. Create an account or sign in to continue.";
+    }
+  }).catch(() => {
+    if (!sessionStorage.getItem("pinglet_pending_invite") && !$("#authError").textContent) {
+      $("#authHint").textContent = "Pinglet is taking longer to wake up. We'll check again before submitting.";
+    }
+  });
 }
 
 /* Personal theme preferences are saved in this browser. */
