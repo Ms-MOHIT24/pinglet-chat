@@ -302,8 +302,25 @@ async function finishLogin(data) {
   localStorage.setItem("pinglet_token", token);
   await boot();
 }
+$("#retrySession").addEventListener("click", async () => {
+  const button = $("#retrySession");
+  button.disabled = true;
+  $("#authError").textContent = "";
+  $("#authHint").textContent = "Checking your saved session…";
+  try {
+    await ensureBackendReady();
+    await boot();
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function boot() {
   try {
+    if (token) {
+      $("#authHint").textContent = "Reconnecting to Pinglet…";
+      await ensureBackendReady();
+    }
     const data = await api("/me");
     me = data.user;
     if (!me.termsAccepted) {
@@ -388,6 +405,12 @@ async function boot() {
     $("#auth").classList.remove("hidden");
     $("#workspace").classList.add("hidden");
     $("#authError").textContent = error.message;
+    const retrySession = $("#retrySession");
+    if (retrySession) {
+      retrySession.classList.toggle("hidden", !token || error.status === 401 || error.status === 404);
+      retrySession.disabled = false;
+    }
+    if (!token) setAuthTab("login");
   }
 }
 async function processPendingInvite() {
