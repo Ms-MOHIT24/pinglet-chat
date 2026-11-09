@@ -66,6 +66,13 @@ check("Chat drafts stay with their friend and empty messages cannot be sent",
   app.includes("messageSending = true") &&
   app.includes("updateComposerState()") &&
   html.includes('title="Write a message to enable sending" disabled'));
+check("Backend readiness is verified before account creation and sign-in",
+  app.includes("async function probeBackendReady") &&
+  app.includes("async function ensureBackendReady") &&
+  app.includes('await ensureBackendReady()') &&
+  app.includes('"/health"') &&
+  app.includes('data.database === "connected"'));
+
 check("Read-only API requests retry transient wake-up errors",
   app.includes("const canRetry = method === \"GET\"") &&
   app.includes("[502, 503, 504]") &&
@@ -77,8 +84,11 @@ check("Shared web and Android motion system",
   css.includes("pinglet-message-in") &&
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
-check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v15"/.test(sw));
+check("Service-worker cache version is current and interactive assets refresh from network",
+  /CACHE_NAME = "pinglet-shell-v16"/.test(sw) &&
+  sw.includes("NETWORK_FIRST_ASSETS") &&
+  sw.includes('fetch(request, { cache: "no-store" })') &&
+  sw.includes('url.pathname.startsWith("/api/")'));
 
 
 check("Terms acceptance is required for account creation and social writes",
