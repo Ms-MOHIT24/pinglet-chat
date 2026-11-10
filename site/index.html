@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="release-config.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -49,7 +50,7 @@
       </div>
     </section>
     <section class="how-section" id="how"><div class="section-wrap how-inner"><div class="section-heading"><div class="eyebrow">GETTING STARTED</div><h2>Your next hello<br><span>is a few steps away.</span></h2></div><div class="steps"><div class="step"><b>01</b><div><h3>Get the app</h3><p>Download the Android release when it is ready for public use.</p></div></div><div class="step"><b>02</b><div><h3>Set up your space</h3><p>Follow the in-app onboarding and account setup.</p></div></div><div class="step"><b>03</b><div><h3>Say hello</h3><p>Connect with people you know and start a conversation.</p></div></div></div></div></section>
-    <section class="download section-wrap" id="download"><div class="download-panel"><div class="download-glow"></div><div class="eyebrow"><span class="pulse"></span> ANDROID RELEASE</div><h2>Your people are<br>one Pinglet away.</h2><p>We're preparing a properly signed and tested Android release. The public download will appear here once release checks are complete.</p><a class="button button-primary button-disabled" href="#download" aria-disabled="true">Download for Android <span>↗</span></a><div class="release-status"><span class="status-dot"></span> Public APK coming soon · Preview builds are for testing only</div></div></section>
+    <section class="download section-wrap" id="download"><div class="download-panel"><div class="download-glow"></div><div class="eyebrow"><span class="pulse"></span> ANDROID RELEASE</div><h2>Your people are<br>one Pinglet away.</h2><p>We're preparing a properly signed and tested Android release. The public download will appear here once release checks are complete.</p><a id="android-download" class="button button-primary button-disabled" href="#download" aria-disabled="true" tabindex="-1">Download for Android <span>↗</span></a><div class="release-status"><span class="status-dot"></span><span id="release-status-text">Public APK coming soon · Preview builds are for testing only</span></div></div></section>
     <section class="closing section-wrap"><div><div class="eyebrow">STAY IN THE LOOP</div><h2>Make room for<br><span>better conversations.</span></h2></div><a class="button button-outline" href="https://github.com/Ms-MOHIT24/pinglet-chat" target="_blank" rel="noopener">Follow the project <span>↗</span></a></section>
   </main>
   <footer class="site-footer"><a class="brand" href="#top"><span class="brand-mark">p<span>.</span></span><span>pinglet</span></a><p>Made for conversations and moments that matter.</p><div class="footer-links"><a href="https://github.com/Ms-MOHIT24/pinglet-chat" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/Ms-MOHIT24/pinglet-chat/issues" target="_blank" rel="noopener">Support</a><a href="#download">Android release</a></div><small>© <span id="year"></span> Pinglet. All rights reserved.</small></footer>
