@@ -22,6 +22,13 @@ function check(label, condition) {
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 check("HTML IDs are unique", duplicates.length === 0);
+check("Public account registration is fail-closed unless explicitly enabled",
+  server.includes('const PUBLIC_SIGNUPS_ENABLED = process.env.PUBLIC_SIGNUPS_ENABLED === "true"') &&
+  server.includes('if (!PUBLIC_SIGNUPS_ENABLED)') &&
+  server.includes('return res.status(503)') &&
+  server.includes("New account registration is temporarily closed") &&
+  server.includes('app.post("/api/register"'));
+
 check("RPS has home, navigation, and direct URL entry points",
   html.includes('id="welcomeRps" href="/games"') &&
   html.includes('id="gamesNav"') &&
