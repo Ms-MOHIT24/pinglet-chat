@@ -13,6 +13,9 @@ const path = require("path");
 const { createOriginPolicy } = require("./lib/origin-policy");
 
 const SECRET = process.env.JWT_SECRET;
+// Fail closed: new public accounts stay disabled until the responsible operator
+// explicitly enables registration after completing release safety gates.
+const PUBLIC_SIGNUPS_ENABLED = process.env.PUBLIC_SIGNUPS_ENABLED === "true";
 if (!SECRET || Buffer.byteLength(SECRET) < 32) throw new Error("JWT_SECRET must contain at least 32 random bytes.");
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
 const app = express();
@@ -213,6 +216,10 @@ app.get("/api/calls/ice-servers", auth, termsRequired, (req, res) => {
 });
 
 app.post("/api/register", authLimiter, async (req, res) => {
+  if (!PUBLIC_SIGNUPS_ENABLED) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(503).json({ error: "New account registration is temporarily closed while Pinglet completes its safety and release checks." });
+  }
   try {
     const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
     const password = req.body.password, pubkey = req.body.pubkey;
