@@ -1,0 +1,134 @@
+name: Verify Android Release Bundle Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "public/**"
+      - "lib/**"
+      - "scripts/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-release-build-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "public/**"
+      - "lib/**"
+      - "scripts/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-release-build-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pinglet-android-release-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release-aab:
+    name: Build and verify a CI-only signed AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Configure Android media permissions
+        run: node scripts/configure-android-permissions.js
+
+      - name: Sync bundled web assets
+        run: npx cap sync android
+
+      - name: Verify generated target API
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_SDK="$(grep -RhoE 'targetSdkVersion[[:space:]]*=[[:space:]]*[0-9]+' android --include='*.gradle' --include='*.gradle.kts' | head -n1 | grep -oE '[0-9]+$' || true)"
+          if [[ -z "$TARGET_SDK" ]]; then
+            echo "Could not determine generated Android targetSdkVersion."
+            exit 1
+          fi
+          echo "Generated Android target SDK: $TARGET_SDK"
+          if (( TARGET_SDK < 36 )); then
+            echo "Generated Android target SDK is below 36."
+            exit 1
+          fi
+
+      - name: Create a throwaway CI signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android/app
+          TEMP_PASSWORD="$(openssl rand -hex 24)"
+          TEMP_ALIAS="pinglet-ci-temporary"
+          keytool -genkeypair -noprompt \
+            -keystore android/app/upload-key.jks \
+            -storepass "$TEMP_PASSWORD" \
+            -keypass "$TEMP_PASSWORD" \
+            -alias "$TEMP_ALIAS" \
+            -keyalg RSA -keysize 2048 -validity 2 \
+            -dname "CN=Pinglet CI Only, OU=Non-production, O=Pinglet, C=IN"
+          {
+            echo "ANDROID_KEYSTORE_PASSWORD=$TEMP_PASSWORD"
+            echo "ANDROID_KEY_ALIAS=$TEMP_ALIAS"
+            echo "ANDROID_KEY_PASSWORD=$TEMP_PASSWORD"
+          } >> "$GITHUB_ENV"
+          echo "Created a disposable signing key for this runner only."
+
+      - name: Configure release signing
+        run: node scripts/configure-android-signing.js
+
+      - name: Build release App Bundle
+        working-directory: android
+        run: ./gradlew --no-daemon bundleRelease
+
+      - name: Verify AAB signature and bundle identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB="android/app/build/outputs/bundle/release/app-release.aab"
+          test -s "$AAB"
+          jarsigner -verify -verbose -certs "$AAB" > /tmp/pinglet-aab-signature.txt
+          keytool -printcert -jarfile "$AAB" > /tmp/pinglet-aab-certificate.txt
+          keytool -list -v \
+            -keystore android/app/upload-key.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" > /tmp/pinglet-ci-key-certificate.txt
+          EXPECTED_FINGERPRINT="$(awk '/SHA256:/{print $2; exit}' /tmp/pinglet-ci-key-certificate.txt)"
+          ACTUAL_FINGERPRINT="$(awk '/SHA256:/{print $2; exit}' /tmp/pinglet-aab-certificate.txt)"
+          test -n "$EXPECTED_FINGERPRINT"
+          test "$EXPECTED_FINGERPRINT" = "$ACTUAL_FINGERPRINT"
+          grep -Fq "Pinglet CI Only" /tmp/pinglet-aab-certificate.txt
+          grep -Eq 'applicationId[[:space:]]+"com\.pinglet\.chat"' android/app/build.gradle
+          echo "PASS: AAB exists, signature verifies, and the signing certificate matches this CI-only key."
+          echo "PASS: Android application ID is com.pinglet.chat."
+          sha256sum "$AAB"
+
+      - name: Explain signing boundary
+        if: always()
+        run: |
+          echo "This workflow uses an ephemeral CI-only key. It never uploads or publishes the AAB."
+          echo "Its output is not a production signing artifact and cannot close the production signing gate."
