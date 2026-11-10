@@ -70,6 +70,62 @@ async function api(path, options = {}) {
 
   throw lastError || new Error("Pinglet is taking longer than expected to respond. Please retry.");
 }
+// Warm Render's web service and database before the first account write. This is
+// intentionally a read-only probe: registration/login are never blindly retried,
+// so a slow response cannot create duplicate accounts or repeat a mutation.
+let backendReadyUntil = 0;
+let backendReadyPromise = null;
+async function probeBackendReady() {
+  const retryDelays = [1200, 2400, 4000, 6000, 8000, 10000];
+  const healthUrl = (API_ORIGIN || location.origin) + "/health";
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+    try {
+      const response = await fetch(healthUrl, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.ok === true && data.database === "connected") {
+        backendReadyUntil = Date.now() + 45000;
+        return data;
+      }
+
+      const error = new Error(
+        response.status === 503
+          ? "Pinglet is waking up. Please try again shortly."
+          : "Pinglet could not confirm that the service is ready."
+      );
+      error.status = response.status;
+      if (![502, 503, 504].includes(response.status) || attempt === retryDelays.length) throw error;
+      lastError = error;
+    } catch (error) {
+      const isTransientNetworkError = !Number.isInteger(error.status) &&
+        (error instanceof TypeError || error.name === "AbortError" || error.name === "NetworkError");
+      if (!isTransientNetworkError && ![502, 503, 504].includes(error.status)) throw error;
+      if (attempt === retryDelays.length) throw error;
+      lastError = error;
+    }
+
+    if (attempt === 0) {
+      const hint = $("#authHint");
+      if (hint) hint.textContent = "Waking up Pinglet… your account details have not been submitted yet.";
+    }
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+  }
+
+  throw lastError || new Error("Pinglet is still waking up. Please try again in a moment.");
+}
+function ensureBackendReady() {
+  if (Date.now() < backendReadyUntil) return Promise.resolve();
+  if (!backendReadyPromise) {
+    backendReadyPromise = probeBackendReady().finally(() => { backendReadyPromise = null; });
+  }
+  return backendReadyPromise;
+}
+
 function bytesToBase64(value) { return btoa(String.fromCharCode(...new Uint8Array(value))); }
 function base64ToBytes(value) { return Uint8Array.from(atob(value), c => c.charCodeAt(0)); }
 
@@ -186,6 +242,7 @@ function setConnectionStatus(label, connected) {
 }
 function show(view) {
   if (view !== "chat" && voicePointerHeld) { voicePointerHeld = false; cancelVoiceMessage(); }
+  closeMoreMenu();
   ["welcome", "chat", "games", "callRooms"].forEach(id => $("#" + id).classList.toggle("hidden", id !== (view === "rooms" ? "callRooms" : view)));
   document.body.dataset.view = view;
   const activeNav = view === "games" ? "gamesNav" : view === "rooms" ? "roomsNav" : "homeNav";
@@ -219,6 +276,9 @@ $("#authForm").addEventListener("submit", async (event) => {
   $("#authError").textContent = "";
   $("#authSubmit").disabled = true;
   try {
+    $("#authHint").textContent = "Connecting to Pinglet…";
+    await ensureBackendReady();
+    $("#authHint").textContent = mode === "create" ? "Service ready. Creating your account…" : "Service ready. Signing you in…";
     if (mode === "create") {
       const pair = await generateKeys();
       const pubkey = await exportPublicKey(pair.publicKey);
@@ -230,7 +290,7 @@ $("#authForm").addEventListener("submit", async (event) => {
       const data = await api("/login", { method: "POST", body: JSON.stringify({ code: $("#code").value, password: $("#password").value }) });
       privateKey = await readPrivateKey(data.user.id);
       if (!privateKey) {
-        $("#authError").textContent = "This browser has no saved encryption key for this account. Device recovery is not available in this demo.";
+        $("#authError").textContent = "Your friend code and password were accepted, but this browser does not have the encryption key for this account. Use the browser or device where you created the account; cross-device key recovery is not available yet.";
         return;
       }
       await finishLogin(data);
@@ -243,8 +303,28 @@ async function finishLogin(data) {
   localStorage.setItem("pinglet_token", token);
   await boot();
 }
+$("#retrySession").addEventListener("click", async () => {
+  const button = $("#retrySession");
+  button.disabled = true;
+  $("#authError").textContent = "";
+  $("#authHint").textContent = "Checking your saved session…";
+  try {
+    await ensureBackendReady();
+    await boot();
+  } catch {
+    $("#authError").textContent = "Pinglet could not reconnect. Please check your connection and try again.";
+    $("#authHint").textContent = "Your saved session is still on this device. Try again when Pinglet is available.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function boot() {
   try {
+    if (token) {
+      $("#authHint").textContent = "Reconnecting to Pinglet…";
+      await ensureBackendReady();
+    }
     const data = await api("/me");
     me = data.user;
     if (!me.termsAccepted) {
@@ -329,6 +409,12 @@ async function boot() {
     $("#auth").classList.remove("hidden");
     $("#workspace").classList.add("hidden");
     $("#authError").textContent = error.message;
+    const retrySession = $("#retrySession");
+    if (retrySession) {
+      retrySession.classList.toggle("hidden", !token || error.status === 401 || error.status === 404);
+      retrySession.disabled = false;
+    }
+    if (!token) setAuthTab("login");
   }
 }
 async function processPendingInvite() {
@@ -1056,6 +1142,7 @@ document.addEventListener("keydown", event => {
     $("#modal").classList.add("hidden");
     $("#themeModal").classList.add("hidden");
     closeQrScanner();
+    if (!$("#moreModal").classList.contains("hidden")) closeMoreMenu(true);
     $("#requests").classList.remove("mobile-open");
   }
 });
@@ -1104,6 +1191,46 @@ $("#roomsNav").addEventListener("click", event => {
   show("rooms");
   $("#contextEyebrow").textContent = "YOUR PRIVATE HANGOUT";
   $("#contextTitle").textContent = "Voice and video rooms.";
+});
+
+function closeMoreMenu(restoreFocus = false) {
+  const modal = $("#moreModal");
+  const trigger = $("#moreNav");
+  if (modal) modal.classList.add("hidden");
+  if (trigger) {
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.classList.remove("active");
+    if (restoreFocus) trigger.focus();
+  }
+}
+function openMoreMenu() {
+  const modal = $("#moreModal");
+  const trigger = $("#moreNav");
+  if (!modal || !trigger) return;
+  modal.classList.remove("hidden");
+  trigger.setAttribute("aria-expanded", "true");
+  trigger.classList.add("active");
+  $("#moreAppearance").focus();
+}
+$("#moreNav").addEventListener("click", () => {
+  if ($("#moreModal").classList.contains("hidden")) openMoreMenu();
+  else closeMoreMenu(true);
+});
+$("#moreClose").addEventListener("click", () => closeMoreMenu(true));
+$("#moreModal").addEventListener("click", event => {
+  if (event.target.id === "moreModal") closeMoreMenu(true);
+});
+$("#moreAppearance").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#themesNav").click();
+});
+$("#moreSafety").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#safetyNav").click();
+});
+$("#moreLogout").addEventListener("click", () => {
+  closeMoreMenu();
+  $("#logout").click();
 });
 $("#themesNav").addEventListener("click", () => $("#requests").classList.remove("mobile-open"));
 function openReportModal(evidence = "", target = peer) {
@@ -1673,8 +1800,21 @@ async function createCallPeer(peerId, peerName, initiator, userId = null) {
     if (generation === callSessionGeneration) {
       const pending = callPeerPromises.get(peerId);
       if (pending === creation) callPeerPromises.delete(peerId);
+
+      // A peer is registered before offer/track setup completes. If any of
+      // those steps fails, close and remove that partial peer so a retry can
+      // create a fresh RTCPeerConnection instead of reusing a broken one.
+      const failedPeer = callPeers.get(peerId);
+      if (failedPeer) {
+        failedPeer.pc.onicecandidate = null;
+        failedPeer.pc.ontrack = null;
+        failedPeer.pc.onconnectionstatechange = null;
+        failedPeer.pc.close();
+        callPeers.delete(peerId);
+      }
+
       const entry = callTiles.get(peerId);
-      if (!callPeers.has(peerId) && entry) {
+      if (entry) {
         entry.tile.remove();
         callTiles.delete(peerId);
       }
@@ -1815,6 +1955,20 @@ else if (sessionStorage.getItem("pinglet_pending_invite")) {
   $("#authHint").textContent = "You have a friend invite waiting. Create an account or sign in to send your request.";
 }
 
+// Start a non-blocking health check while a signed-out visitor reads the form.
+// The submit handler shares this promise and waits for database readiness.
+if (!token) {
+  ensureBackendReady().then(() => {
+    if (!sessionStorage.getItem("pinglet_pending_invite") && !$("#authError").textContent) {
+      $("#authHint").textContent = "Pinglet is ready. Create an account or sign in to continue.";
+    }
+  }).catch(() => {
+    if (!sessionStorage.getItem("pinglet_pending_invite") && !$("#authError").textContent) {
+      $("#authHint").textContent = "Pinglet is taking longer to wake up. We'll check again before submitting.";
+    }
+  });
+}
+
 /* Personal theme preferences are saved in this browser. */
 const themeNames = ["galaxy","aurora","nature","ocean","sakura","cute","pawprint","midnight"];
 function applyTheme(theme) {
@@ -1902,7 +2056,7 @@ $("#modalForm").addEventListener("submit", async event => {
 });
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(error => console.warn("Pinglet offline shell unavailable:", error)));
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(error => console.warn("Pinglet offline shell unavailable:", error)));
 }
 
 

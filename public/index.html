@@ -22,7 +22,7 @@
       <label id="termsConsentWrap" class="terms-consent"><input id="termsAccepted" type="checkbox" required><span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Use</a> and have read the <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <button class="primary wide" id="authSubmit">Create my space <span aria-hidden="true">↗</span></button>
     </form>
-    <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError" role="alert"></p>
+    <p class="hint" id="authHint">Your unique friend code is created automatically.</p><p class="error" id="authError" role="alert"></p><button class="primary wide hidden" id="retrySession" type="button">Reconnect to my account</button>
     <p class="auth-footnote"><span class="auth-footnote-dot"></span> Small circles. Better conversations.</p><p class="hint">Need to remove your account? <a href="/delete-account.html" target="_blank" rel="noopener">Delete your Pinglet account</a>.</p>
   </div>
 </section>
@@ -50,6 +50,7 @@
    <button id="requestsNav" class="nav-btn" aria-expanded="false" title="Friend requests"><span>✉</span><b>Requests</b><i id="requestsNavCount" class="nav-dot hidden">0</i></button>
    <a id="gamesNav" class="nav-btn" href="/games" title="Open games"><span>✳</span><b>Games</b></a>
     <a id="roomsNav" class="nav-btn" href="/call-rooms" title="Open voice and video rooms"><span>◉</span><b>Call rooms</b></a>
+    <button id="moreNav" class="nav-btn" type="button" title="More options" aria-haspopup="dialog" aria-controls="moreModal" aria-expanded="false"><span aria-hidden="true">•••</span><b>More</b></button>
    <button id="themesNav" class="nav-btn" title="Change theme"><span>◐</span><b>Appearance</b></button>
    <button id="safetyNav" class="nav-btn" title="Safety and account settings"><span>盾</span><b>Safety & account</b></button>
    <button id="logout" class="nav-btn" title="Sign out"><span>↗</span><b>Sign out</b></button>
@@ -171,6 +172,18 @@
  </section>
 </section>
 </main>
+<div id="moreModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
+ <div class="modal-card more-modal-card">
+  <button class="modal-close" id="moreClose" type="button" aria-label="Close more options">×</button>
+  <p class="eyebrow">QUICK SETTINGS</p><h2 id="moreTitle">More options</h2>
+  <p class="muted">Your app preferences and account controls, all in one place.</p>
+  <div class="more-actions">
+   <button id="moreAppearance" class="ghost more-action" type="button"><span aria-hidden="true">◐</span><span>Appearance</span></button>
+   <button id="moreSafety" class="ghost more-action" type="button"><span aria-hidden="true">盾</span><span>Safety &amp; account</span></button>
+   <button id="moreLogout" class="ghost more-action" type="button"><span aria-hidden="true">↗</span><span>Sign out</span></button>
+  </div>
+ </div>
+</div>
 <div id="themeModal" class="modal hidden"><div class="modal-card theme-modal"><button class="modal-close" id="themeClose">×</button><p class="eyebrow">MAKE PINGLET YOURS</p><h2>Choose your world</h2><p class="muted">Pick a look for your app. Your choice is saved on this device.</p><div id="themeGrid" class="theme-grid"><button class="theme-option" data-theme-choice="galaxy"><span class="theme-swatch galaxy-swatch">✦</span><b>Galaxy</b><small>Cosmic purple</small></button><button class="theme-option" data-theme-choice="aurora"><span class="theme-swatch aurora-swatch">✧</span><b>Aurora</b><small>Northern lights</small></button><button class="theme-option" data-theme-choice="nature"><span class="theme-swatch nature-swatch">🌿</span><b>Nature</b><small>Forest green</small></button><button class="theme-option" data-theme-choice="ocean"><span class="theme-swatch ocean-swatch">🌊</span><b>Ocean</b><small>Deep blue</small></button><button class="theme-option" data-theme-choice="sakura"><span class="theme-swatch sakura-swatch">🌸</span><b>Sakura</b><small>Soft pink</small></button><button class="theme-option" data-theme-choice="cute"><span class="theme-swatch cute-swatch">🐻</span><b>Cute</b><small>Pastel peach</small></button><button class="theme-option" data-theme-choice="pawprint"><span class="theme-swatch paw-swatch">🐾</span><b>Animal Paws</b><small>Warm and playful</small></button><button class="theme-option" data-theme-choice="midnight"><span class="theme-swatch midnight-swatch">☾</span><b>Midnight</b><small>Minimal dark</small></button></div><div class="custom-wallpaper"><b>Use your favourite character wallpaper</b><p class="muted">Upload an image saved on your device. It stays in this browser only.</p><label class="upload-wallpaper">Choose an image<input id="wallpaperUpload" type="file" accept="image/png,image/jpeg,image/webp"></label><button id="clearWallpaper" class="ghost">Remove custom wallpaper</button></div></div></div>
 <div id="modal" class="modal hidden"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><p class="eyebrow" id="modalEyebrow">GROW YOUR CIRCLE</p><h2 id="modalTitle">Add a friend</h2><p class="muted" id="modalText">Enter their unique Pinglet code.</p><form id="modalForm"><label id="modalLabel">Friend code<input id="modalInput" placeholder="14-character code" required></label><button class="primary wide" id="modalSubmit">Send friend request →</button></form><div id="qrShareContent" class="qr-share hidden"></div><p id="modalError" class="error"></p></div></div>
 <div id="termsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="termsModalTitle">

@@ -13,6 +13,7 @@ const sw = read("public/sw.js");
 const packageJson = JSON.parse(read("package.json"));
 const runtimeConfigScript = read("scripts/configure-runtime.js");
 const { createOriginPolicy } = require("../lib/origin-policy");
+const { isValidTurnUrl } = require("../lib/turn-url");
 
 function check(label, condition) {
   assert.ok(condition, label);
@@ -65,6 +66,21 @@ check("Chat drafts stay with their friend and empty messages cannot be sent",
   app.includes("messageSending = true") &&
   app.includes("updateComposerState()") &&
   html.includes('title="Write a message to enable sending" disabled'));
+check("Sign-in explains when a password is accepted but the local encryption key is missing",
+  app.includes("Your friend code and password were accepted") &&
+  app.includes("Use the browser or device where you created the account"));
+
+check("Backend readiness is verified before account creation, sign-in and session restore",
+  app.includes("async function probeBackendReady") &&
+  app.includes("function ensureBackendReady()") &&
+  app.includes('await ensureBackendReady()') &&
+  app.includes('"/health"') &&
+  app.includes('data.database === "connected"') &&
+  app.includes('$("#retrySession").addEventListener') &&
+  app.includes('retrySession.classList.toggle("hidden"') &&
+  app.includes("Your saved session is still on this device") &&
+  html.includes('id="retrySession"'));
+
 check("Read-only API requests retry transient wake-up errors",
   app.includes("const canRetry = method === \"GET\"") &&
   app.includes("[502, 503, 504]") &&
@@ -76,8 +92,25 @@ check("Shared web and Android motion system",
   css.includes("pinglet-message-in") &&
   css.includes("prefers-reduced-motion:reduce") &&
   app.includes("function show(view)"));
-check("Service-worker cache version is current",
-  /CACHE_NAME = "pinglet-shell-v15"/.test(sw));
+check("Mobile navigation keeps primary tabs readable and groups secondary settings in More",
+  html.includes('id="moreNav"') &&
+  html.includes('aria-controls="moreModal"') &&
+  html.includes('id="moreModal"') &&
+  ["moreAppearance", "moreSafety", "moreLogout"].every(id => html.includes('id="' + id + '"')) &&
+  app.includes("function openMoreMenu()") &&
+  app.includes('trigger.classList.add("active")') &&
+  app.includes('trigger.classList.remove("active")') &&
+  app.includes('$("#moreSafety").addEventListener') &&
+  app.includes('$("#moreLogout").addEventListener') &&
+  css.includes("grid-template-columns:repeat(5,minmax(0,1fr))") &&
+  css.includes("#themesNav,#safetyNav,#logout{display:none!important}") &&
+  css.includes("#moreNav{display:flex!important}"));
+check("Service-worker cache version is current and interactive assets refresh from network",
+  /CACHE_NAME = "pinglet-shell-v17"/.test(sw) &&
+  sw.includes("NETWORK_FIRST_ASSETS") &&
+  sw.includes('fetch(request, { cache: "no-store" })') &&
+  sw.includes('url.pathname.startsWith("/api/")') &&
+  sw.includes('["/health", "/readyz", "/livez"].includes(url.pathname)'));
 
 
 check("Terms acceptance is required for account creation and social writes",
@@ -220,6 +253,28 @@ check("TURN credentials are minted server-side and used by WebRTC",
   app.includes("callPeerPromises") &&
   app.includes("callSessionGeneration++") &&
   app.includes("generation !== callSessionGeneration"));
+
+check("Failed WebRTC peer setup closes and removes the partial peer before retry",
+  app.includes("const failedPeer = callPeers.get(peerId)") &&
+  app.includes("failedPeer.pc.close()") &&
+  app.includes("callPeers.delete(peerId)") &&
+  app.includes("entry.tile.remove()"));
+
+check("TURN URI validation rejects credentials, malformed hosts, ports and parameters",
+  isValidTurnUrl("turn:turn.example.com:3478?transport=udp") &&
+  isValidTurnUrl("turns:turn.example.com:5349?transport=tcp") &&
+  isValidTurnUrl("turn:[2001:db8::1]:3478") &&
+  !isValidTurnUrl("turn:user:pass@turn.example.com:3478") &&
+  !isValidTurnUrl("turn:turn.example.com:70000") &&
+  !isValidTurnUrl("turn:turn..example.com:3478") &&
+  !isValidTurnUrl("turn:turn.example.com:3478?transport=udp&secret=x") &&
+  !isValidTurnUrl("turn:turn.example.com/path"));
+
+check("Database restore rehearsal is restricted to the GitHub CI fixture databases",
+  read("scripts/verify-database-backup-restore.sh").includes('os.environ.get("GITHUB_ACTIONS") != "true"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('source_db != "pinglet_test"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('target_db != "pinglet_restore_check"') &&
+  read("scripts/verify-database-backup-restore.sh").includes('source.port != 5432'));
 
 check("Voice-message reports explain that audio is not attached",
   app.includes("The audio itself is not attached to this report") &&

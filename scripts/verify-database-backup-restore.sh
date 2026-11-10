@@ -5,28 +5,34 @@ set +x
 : "${DATABASE_URL:?DATABASE_URL must point to the disposable CI source database}"
 : "${RESTORE_DATABASE_URL:?RESTORE_DATABASE_URL must point to the disposable localhost restore database}"
 
-# This check is deliberately limited to a localhost-only CI database. It must
-# never be reused as a production restore tool.
+# This rehearsal is CI-only. Localhost alone is not a sufficient safeguard:
+# an SSH tunnel can make a remote database appear to be a localhost endpoint.
 python3 - <<'PY'
 import os
 from urllib.parse import urlparse
 
+if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("CI") != "true":
+    raise SystemExit("Refusing backup rehearsal outside GitHub Actions CI.")
+
 source = urlparse(os.environ["DATABASE_URL"])
 target = urlparse(os.environ["RESTORE_DATABASE_URL"])
-allowed_hosts = {"127.0.0.1", "localhost", "::1"}
 source_db = source.path.lstrip("/").split("/", 1)[0]
 target_db = target.path.lstrip("/").split("/", 1)[0]
 
 if source.scheme not in {"postgres", "postgresql"} or target.scheme not in {"postgres", "postgresql"}:
     raise SystemExit("Backup verification requires PostgreSQL connection URLs.")
-if source.hostname not in allowed_hosts or target.hostname not in allowed_hosts:
-    raise SystemExit("Refusing backup verification unless both databases are localhost-only.")
+if source.hostname != "127.0.0.1" or target.hostname != "127.0.0.1":
+    raise SystemExit("Refusing backup verification unless both databases use the CI loopback host.")
+if source.port != 5432 or target.port != 5432:
+    raise SystemExit("Refusing backup verification unless both databases use the CI PostgreSQL port.")
+if source.username != "postgres" or target.username != "postgres":
+    raise SystemExit("Refusing backup verification unless both URLs use the CI database user.")
+if source_db != "pinglet_test":
+    raise SystemExit("Source must be the disposable CI pinglet_test database.")
 if target_db != "pinglet_restore_check":
     raise SystemExit("Restore target must be the disposable pinglet_restore_check database.")
 if source_db == target_db:
     raise SystemExit("Source and restore databases must be different.")
-if source.port != target.port or source.hostname != target.hostname:
-    raise SystemExit("Source and restore databases must use the same local CI PostgreSQL service.")
 PY
 
 backup_dir="$(mktemp -d)"
