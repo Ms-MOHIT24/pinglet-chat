@@ -18,6 +18,8 @@
 
 ## Security, privacy, and user safety — production blockers
 
+- [x] A fail-closed registration gate is proposed in review branch `safety/prelaunch-registration-gate`: new registrations return HTTP 503 unless the service operator explicitly sets `PUBLIC_SIGNUPS_ENABLED=true`. Existing account sign-in is unchanged. Do not enable public registration until the remaining safety and release gates are approved; the branch is not deployed.
+
 - [ ] An adult operator owns the service, the Google Play Console account, infrastructure, keys, user support, and legal/policy decisions.
 - [ ] Configure a monitored child-safety contact and publish it on the Child Safety Standards page and in Play Console.
 - [ ] Appoint people who can review reports. The current code has a protected report API, but no staffed moderation operation or moderation dashboard. Define review coverage, escalation, response targets, evidence handling, appeal/contact path, and incident records before inviting real users.
