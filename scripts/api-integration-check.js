@@ -105,6 +105,7 @@ async function main() {
       PORT: String(port),
       JWT_SECRET: secret,
       REPORTS_ADMIN_TOKEN: adminToken,
+      PUBLIC_SIGNUPS_ENABLED: "true",
       TURN_URLS: "turn:turn.example.test:3478?transport=udp,turns:turn.example.test:5349?transport=tcp",
       TURN_SHARED_SECRET: turnSharedSecret,
       TURN_CREDENTIAL_TTL_SECONDS: String(turnTtlSeconds),
