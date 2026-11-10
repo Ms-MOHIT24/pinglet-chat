@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - "public/**"
+      - "site/**"
       - "scripts/**"
       - "server.js"
       - "package.json"
@@ -60,6 +61,7 @@ jobs:
           node --check server.js &&
           node --check public/app.js &&
           node --check scripts/smoke-check.js &&
+          node --check scripts/site-smoke-check.js &&
           node --check scripts/api-integration-check.js &&
           node --check scripts/configure-android-signing.js &&
           node --check scripts/copy-vendor.js &&
@@ -70,6 +72,9 @@ jobs:
 
       - name: Smoke-check app features
         run: node scripts/smoke-check.js
+
+      - name: Smoke-check public website and release safety gate
+        run: node scripts/site-smoke-check.js
 
       - name: API integration checks
         env:
