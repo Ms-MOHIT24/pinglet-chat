@@ -105,3 +105,36 @@ GitHub Actions validation run [#79](https://github.com/Ms-MOHIT24/pinglet-chat/a
 ## Release decision rule
 
 Any open critical or high-severity privacy, safety, security, reliability or accessibility defect blocks public release. A successful CI run cannot replace external health checks, a verified production restore, human review, physical-device testing or explicit operator approval.
+
+## Latest operational recheck — 10 November 2026
+
+This section supersedes any earlier statement that the merged PR #4 commit had not yet been deployed. It records the latest read-only provider checks; it does **not** approve public release.
+
+### Render website
+
+- [x] The independent Static Site `pinglet-website` is configured to deploy from `website/landing-page`, publishing `site/`.
+- [x] The latest checked website deployment is Live on commit `4b806b4d24e64b2d4bfc5011c82aaeeca87ab56c` (Render deploy `dep-dbpd4mon74is73dkbjtg`).
+- [x] GitHub validation run [#90](https://github.com/Ms-MOHIT24/pinglet-chat/actions/runs/42780958882) passed on the same commit. This includes the public-site smoke test, app smoke checks, PostgreSQL integration tests, Android runtime/CSP generation checks, and the disposable CI-only database backup/restore rehearsal.
+- [x] The public website explicitly describes itself as informational, displays the app launch status, links to the privacy/safety status page, and keeps the Android download disabled while no approved signed APK URL is configured.
+- [ ] Visual and physical-device review of the deployed site on current mobile and desktop browsers remains outstanding.
+
+### Render production backend and database
+
+- [x] Read-only Render inspection confirms `pinglet-chat-live` remains on `main`, Free plan, one configured instance, auto-deploy enabled, and HTTP health path `/health`.
+- [x] Render reports the current live deployment as commit `d1799538a804ef736d29376cae5d79a1c88963f8` (PR #4 merge), deploy `dep-dbpd2n0n74is73dk65sg`, completed successfully on 10 November 2026.
+- [ ] A verified external HTTP response from `/health` is still outstanding. The Render HTTP request-count and latency metrics returned empty series in the inspected 24-hour window, and the log retrieval API was unavailable during the check. A failed external network lookup from the inspection environment is not proof that the service itself is down or up.
+- [ ] Production database export, archive validation, and restore into a separate disposable database have **not** been performed. The successful CI backup/restore test uses disposable workflow databases and is not a production backup.
+- [ ] The linked PostgreSQL 18 database is reported `available` on the Free plan, with provider expiry `2026-12-06T21:47:38Z` (**7 December 2026, 03:17:38 IST**). The responsible account owner must choose and complete an approved continuity plan before that time.
+- [ ] The legacy Render web service `pinglet-chat` remains present on `main`; its only listed deployment failed with exit status 12 and it has no health-check path. Its traffic/use is unknown. Do not delete or reconfigure it until the service owner confirms whether anything depends on it.
+
+### Android release and human operating requirements
+
+- [ ] The published GitHub artifact remains the prerelease `Pinglet Android Preview` containing `app-debug.apk`; it is not a signed production APK or Play Store AAB. The website download remains intentionally disabled.
+- [ ] An eligible adult account owner must control Play Console identity, the upload keystore, signing secrets, production infrastructure decisions, privacy/legal approvals, and incident responsibility. Do not put signing keys, account passwords, or secret values in this repository or in chat.
+- [ ] Google Play's current UGC policy requires robust, ongoing moderation, terms acceptance, in-app reporting, blocking for one-to-one interaction, and appropriate action on reported content/users. Pinglet's code does not by itself provide staffed reviewers or a monitored public child-safety contact.
+- [ ] The responsible adult operator must provide verifiable evidence of reviewer coverage, escalation and retention procedures, and an actually monitored child-safety contact before the app is opened to the public.
+- [ ] The intended age group, consent model, app content rating, and Data safety declarations must be selected and reviewed against the actual product and applicable Play policies. Do not falsify age or audience declarations.
+- [ ] Real-device acceptance, a real TURN provider and relayed-call tests, and an independent review of the experimental message-encryption design remain outstanding.
+
+**Release decision remains: NOT APPROVED for public app launch.** The static website is published. Automated engineering checks are passing on the recorded commits. Production recoverability, externally verified service health, human moderation, final policy/legal review, signed Android release, and device/security acceptance remain open. A green dashboard or CI run cannot substitute for these checks.
+
