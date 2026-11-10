@@ -4,7 +4,7 @@ Pinglet is a browser-first social chat prototype with unique friend codes, QR in
 
 ## Current features
 
-- **Account safety:** Terms acceptance, report and block controls, blocked-account management, account deletion from inside the app and from a public web page, and a protected moderation-report API.
+- **Account safety:** Terms acceptance, report and block controls, blocked-account management, account deletion from inside the app and from a public web page, and a protected moderation-report API. New account registrations are closed by default and require an explicit operator-controlled opt-in.
 - **Policy pages:** Terms of Use, Privacy Policy, Child Safety Standards and external account deletion pages. These are drafts until the responsible service operator finalises contact and retention details.
 - **Android packaging:** the Capacitor app bundles the web UI locally and connects to the hosted API; it no longer depends on loading the hosted website as its app screen.
 
@@ -20,7 +20,7 @@ Pinglet is a browser-first social chat prototype with unique friend codes, QR in
 
 ## Important limitations
 
-- **Not yet Play Store approved or release-ready.** Automated builds are previews. A signed release App Bundle, adult-operated Play Console account, verified policy declarations, live child-safety contact, staffed report review, and hands-on device testing are still required.
+- **Not yet Play Store approved or release-ready.** Automated builds are previews. A signed release App Bundle, adult-operated Play Console account, verified policy declarations, live child-safety contact, staffed report review, and hands-on device testing are still required. The server accepts new accounts only when `PUBLIC_SIGNUPS_ENABLED=true`; leave this variable unset until the responsible operator approves public registration.
 - **Moderation is not staffed by code.** Reports can be stored and accessed through a protected API, but the service operator must configure `REPORTS_ADMIN_TOKEN`, appoint reviewers, publish a monitored child-safety contact, and run a real response/escalation process.
 
 - **Encryption is experimental.** The current ECDH + AES-GCM exchange does not verify identity keys and is not a Signal-protocol implementation or an audited messenger. Do not use it for sensitive conversations.
